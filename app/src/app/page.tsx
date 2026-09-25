@@ -51,8 +51,15 @@ export default function BirthPage() {
     try {
       await connectAsync({ connector });
     } catch (cause) {
-      const detail = cause instanceof Error ? `${cause.name} ${cause.message}` : String(cause);
-      if (/already pending|already processing|request of type .*pending|-32002/i.test(detail)) {
+      const parts: string[] = [];
+      let current: unknown = cause;
+      for (let depth = 0; depth < 4 && current && typeof current === "object"; depth++) {
+        const item = current as { name?: unknown; message?: unknown; code?: unknown; cause?: unknown };
+        for (const value of [item.name, item.message, item.code]) if (typeof value === "string" || typeof value === "number") parts.push(String(value));
+        current = item.cause;
+      }
+      const detail = parts.join(" ");
+      if (/already pending|already processing|request of type .*pending|-32002|resourceunavailablerpcerror/i.test(detail)) {
         setWalletError("ウォレットの接続要求が保留中です。MetaMaskの拡張機能を開き、承認または拒否してください。");
       } else if (/provider not found|no provider|injected.*not found/i.test(detail)) {
         setWalletError("EVMウォレットが見つかりません。MetaMaskなどの拡張機能を有効にしてください。");
