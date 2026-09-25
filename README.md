@@ -22,6 +22,8 @@ Otomo は、World ID の Selfie Check で本人確認した人間に1体だけ�
 
 承認を拒否した場合・期限（5分）切れ・別人の `sub`・古い `auth_time`・state 不一致の場合は、いずれも**何も実行されません**（`tests/approval.test.ts` で網羅）。
 
+相棒ページは4言語（ja / en / zh / ko）の UI と字幕に対応します。右上の言語セレクタ（`localStorage` に保存）を切り替えると、相棒の吹き出しの下に選択言語の字幕が表示されます（`POST /api/translate` — LLM による翻訳を `translations` テーブルにキャッシュ、失敗時は原文フォールバック）。各吹き出しの 🔊 ボタンは**選択中の言語のテキスト**を音声で読み上げます（`POST /api/tts` — Gemini Interactions API、音声は text+lang+voice+model の sha256 でメモリ LRU キャッシュ。`TTS_MODEL` 未設定時は 503 で無効）。「新しい返答を自動で読み上げる」トグルもあります。
+
 ## アーキテクチャ
 
 ```mermaid
@@ -133,7 +135,8 @@ cd ../app && npm run dev      # http://localhost:3000
 | `ENS_PARENT_LABEL` / `ENS_USER_REGISTRY` | 親名ラベル / setup 出力の UserRegistry |
 | `ENS_GRANT_AGENT_IN_INIT` | resolver initialize() の calls 内で mood 権限を付与する仮説の切替 |
 | `AQUA_ADDRESS` / `AQUA_ROUTER_ADDRESS` / `OTOMO_ORDER_BUILDER_ADDRESS` / `MOCK_WETH_ADDRESS` | DeploySepolia.s.sol の出力 |
-| `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | OpenAI 互換 /chat/completions |
+| `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | OpenAI 互換 /chat/completions（翻訳にも使用） |
+| `TTS_MODEL` / `TTS_VOICE` / `TTS_BASE_URL` | Gemini Interactions API の音声合成。`TTS_MODEL` 未設定なら読み上げ無効（503）。鍵は `LLM_API_KEY` を共用、`TTS_VOICE` 未設定時は相棒ごとに決定的に割当 |
 | `APP_SECRET` | セッション Cookie の HMAC 鍵 |
 
 秘密値はすべてサーバーサイドのみ。未設定時はダミーに逃げず、不足変数名を明示してエラーにします（`src/lib/env.ts`）。
@@ -154,6 +157,8 @@ cd ../app && npm run dev      # http://localhost:3000
 - Selfie Check は厳密な「1人1アカウント」を保証しません（medium assurance）。1体制限は nullifier で担保し、追加のリスク判定に sybil_score を使います。
 - 価格はモック想定（2000 USDC/WETH の固定レートで WETH レグを半分に）。モックトークンなので実市場連動ではありません。
 - LLM は OpenAI 互換 `/chat/completions` なら任意のプロバイダに差し替え可能。LLM の出力は intent JSON として zod 検証され、ポリシー判定は常に決定的なコード側です。
+- TTS（Gemini Interactions API）と字幕翻訳は実 API では未検証です。テストは `fetchFn` / `chatFn` 注入と `file:` 一時 DB のみで、外部呼び出しはありません。
+- フォントは `next/font/google`（M PLUS Rounded 1c / Noto Sans SC / KR）で自己ホスト。ビルド時に Google Fonts への接続が必要です。
 
 ## ライセンス
 
