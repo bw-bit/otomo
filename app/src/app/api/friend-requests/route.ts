@@ -1,56 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { getDb, type Companion } from "@/lib/db";
-import { createPendingAction } from "@/lib/approval";
-import { decide } from "@/lib/policy";
-import { agentAllowanceUsdc, isCompanion, resolveName, usdcBalanceOf } from "@/lib/chain";
+import { getDb } from "@/lib/db";
 import { SESSION_COOKIE, readSession } from "@/lib/session";
-import type { Address } from "viem";
+import { acceptWork, deliverWork, reviewWork } from "@/lib/work";
+import { openAiCompatibleChat } from "@/lib/llm";
 
 export const runtime = "nodejs";
-
-const bodySchema = z.object({ id: z.string(), status: z.enum(["accepted", "done"]) });
-
-interface FriendRequest {
-  id: string;
-  from_label: string;
-  to_label: string;
-  task: string;
-  reward_usdc: number;
-  status: string;
-}
-
-/**
- * The friend's owner accepts / completes a request. Completing creates a reward payment
- * on the requester's side that still needs the requester's fresh World ID approval.
- */
+const bodySchema = z.object({ id: z.string(), status: z.enum(["accepted", "delivered", "done"]) });
 export async function POST(req: NextRequest): Promise<Response> {
   const label = readSession(req.cookies.get(SESSION_COOKIE)?.value);
   if (!label) return NextResponse.json({ error: "not signed in" }, { status: 401 });
   const body = bodySchema.safeParse(await req.json().catch(() => null));
-  if (!body.success) return NextResponse.json({ error: body.error.message }, { status: 400 });
-
+  if (!body.success) return NextResponse.json({ error: "invalid request" }, { status: 400 });
   try {
     const db = await getDb();
-    const r = (await db.execute({ sql: `SELECT * FROM friend_requests WHERE id = ?`, args: [body.data.id] })).rows[0] as unknown as FriendRequest | undefined;
-    if (!r || r.to_label !== label) return NextResponse.json({ error: "依頼が見つかりません" }, { status: 404 });
-    const allowed = { accepted: ["open"], done: ["accepted"] }[body.data.status];
-    if (!allowed.includes(r.status)) return NextResponse.json({ error: `今の状態（${r.status}）からは変更できません` }, { status: 409 });
-    await db.execute({ sql: `UPDATE friend_requests SET status = ? WHERE id = ?`, args: [body.data.status, r.id] });
-
-    if (body.data.status === "done" && r.reward_usdc > 0) {
-      const from = (await db.execute({ sql: `SELECT * FROM companions WHERE label = ?`, args: [r.from_label] })).rows[0] as unknown as Companion | undefined;
-      const to = (await db.execute({ sql: `SELECT * FROM companions WHERE label = ?`, args: [r.to_label] })).rows[0] as unknown as Companion | undefined;
-      if (from && to) {
-        const intent = { type: "send_usdc" as const, to: to.full_name, amountUsdc: r.reward_usdc, memo: `reward: ${r.task}` };
-        const decision = await decide(intent, { owner: from.owner as Address, ownerUsdcBalance: usdcBalanceOf, agentAllowanceUsdc: await agentAllowanceUsdc(from.owner as Address), resolveName, isCompanion });
-        if (decision.kind === "needs_approval")
-          await createPendingAction(db, { companion: from.label, intent, resolvedTo: decision.resolvedTo, amountUsdc: decision.amountUsdc, now: Date.now() });
-        else console.warn("[friend] reward not queued", decision);
-      }
-    }
+    const { id, status } = body.data;
+    if (status === "accepted") await acceptWork(db, id, label);
+    else if (status === "delivered") await deliverWork(db, id, label, openAiCompatibleChat);
+    else await reviewWork(db, id, label);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "作業を完了できませんでした" }, { status: 409 });
   }
 }
