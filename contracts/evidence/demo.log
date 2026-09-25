@@ -1,0 +1,71 @@
+Compiling 1 files with Solc 0.8.30
+Solc 0.8.30 finished in 3.60s
+Compiler run successful with warnings:
+Warning (3075): Comparison of internal function pointers can yield unexpected results in the legacy pipeline with the optimizer enabled, and will be disallowed entirely in the next breaking release.
+  --> lib/swap-vm/test/utils/ProgramBuilder.sol:36:17:
+   |
+36 |             if (self.opcodes[i] == targetOpcode) {
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning: Detected artifacts built from source files that no longer exist. Run `forge clean` to make sure builds are in sync with project files.
+ - /Users/R/hackathon/otomo/contracts/foundry-pp/DeployHelper109.sol
+ - /Users/R/hackathon/otomo/contracts/foundry-pp/DeployHelper108.sol
+ - /Users/R/hackathon/otomo/contracts/foundry-pp/DeployHelper107.sol
+Script ran successfully.
+
+== Logs ==
+  === Otomo Aqua + SwapVM demo ===
+  maker (user): 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+  taker       : 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+  Aqua               : 0x5FbDB2315678afecb367f032d93F642f64180aa3
+  AquaSwapVMRouter   : 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+  mUSDC (6dp)        : 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
+  mWETH (18dp)       : 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
+  --- after deploy/mint ---
+    maker wallet  mUSDC: 2000000000 | mWETH: 1000000000000000000
+    taker wallet  mUSDC: 0 | mWETH: 100000000000000000
+    aqua virtual  mUSDC: 0 | mWETH: 0
+  strategyHash:
+  0x23ab08fe997255e4ce1821e766ce1430b43272860816a65bd80203852840275b
+  --- after ship: funds still in maker wallet ---
+    maker wallet  mUSDC: 2000000000 | mWETH: 1000000000000000000
+    taker wallet  mUSDC: 0 | mWETH: 100000000000000000
+    aqua virtual  mUSDC: 1000000000 | mWETH: 500000000000000000
+  quote: pay   10000000000000000 mWETH (raw)
+  quote: get   19550169 mUSDC (raw)
+  swap : paid  10000000000000000 mWETH, got 19550169 mUSDC
+  --- after swap: fee accrued to maker strategy ---
+    maker wallet  mUSDC: 1980449831 | mWETH: 1010000000000000000
+    taker wallet  mUSDC: 19550169 | mWETH: 90000000000000000
+    aqua virtual  mUSDC: 980449831 | mWETH: 510000000000000000
+  --- after dock: strategy closed ---
+    maker wallet  mUSDC: 1980449831 | mWETH: 1010000000000000000
+    taker wallet  mUSDC: 19550169 | mWETH: 90000000000000000
+    aqua virtual  mUSDC: 0 | mWETH: 0
+  === demo done ===
+
+## Setting up 1 EVM.
+
+==========================
+
+Chain 31337
+
+Estimated max fee per gas: 2.000000001 gwei
+Estimated base fee per gas: 1 gwei
+Estimated max priority fee per gas: 0.000000001 gwei
+
+Estimated total gas used for script: 8541737
+
+Estimated amount required: 0.017083474008541737 ETH
+
+==========================
+
+
+==========================
+
+ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+
+Transactions saved to: /Users/R/hackathon/otomo/contracts/broadcast/Demo.s.sol/31337/run-latest.json
+
+Sensitive values saved to: /Users/R/hackathon/otomo/contracts/cache/Demo.s.sol/31337/run-latest.json
+

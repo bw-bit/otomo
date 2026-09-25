@@ -1,0 +1,13 @@
+[profile.default]
+solc = "0.8.30"
+optimizer = true
+optimizer_runs = 700
+via_ir = true
+libs = ["lib"]
+
+[fmt]
+single_line_statement_blocks = "multi"
+multiline_func_header = "all"
+bracket_spacing = true
+int_types = "long"
+number_underscore = "thousands"
