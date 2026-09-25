@@ -27,10 +27,16 @@ export async function POST(req: NextRequest): Promise<Response> {
   const { hint } = parsed.data;
   const payload = parsed.data.idkitResult as unknown as BirthPayload;
 
+  let label: string;
+  try {
+    label = normalizeCompanionLabel(parsed.data.label);
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+  }
+
   let reservedLabel: string | null = null;
   try {
     const env = requireEnv("WORLD_RP_ID", "ENS_PARENT_LABEL", "APP_SECRET", "SEPOLIA_RPC_URL", "ENS_USER_REGISTRY", "OPERATOR_PRIVATE_KEY", "COMPANION_WALLET_KEY", "LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL");
-    const label = normalizeCompanionLabel(parsed.data.label);
     const db = await getDb();
     if ((await db.execute({ sql: `SELECT 1 FROM companions WHERE label = ?`, args: [label] })).rows[0])
       return NextResponse.json({ error: "その名前の相棒はすでに存在します" }, { status: 409 });
