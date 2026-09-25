@@ -25,6 +25,25 @@ export interface PendingAction {
   expires_at: number;
 }
 
+export interface Strategy {
+  id: string;
+  companion: string;
+  action_id: string;
+  maker: string;
+  router: string;
+  /** abi.encode(order) — the `strategy` arg passed to aqua.ship. */
+  strategy: string;
+  strategy_hash: string | null;
+  usdc_amount: number;
+  weth_amount: number;
+  /** Unix seconds. */
+  deadline: number;
+  status: "ready" | "shipped" | "docked";
+  ship_tx: string | null;
+  dock_tx: string | null;
+  created_at: number;
+}
+
 export interface AuthFlow {
   state: string;
   kind: "bind" | "approve";
@@ -51,6 +70,11 @@ CREATE TABLE IF NOT EXISTS friend_requests (
 CREATE TABLE IF NOT EXISTS messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT, companion TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL,
   created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS strategies (
+  id TEXT PRIMARY KEY, companion TEXT NOT NULL, action_id TEXT NOT NULL, maker TEXT NOT NULL,
+  router TEXT NOT NULL, strategy TEXT NOT NULL, strategy_hash TEXT,
+  usdc_amount REAL NOT NULL, weth_amount REAL NOT NULL, deadline INTEGER NOT NULL,
+  status TEXT NOT NULL, ship_tx TEXT, dock_tx TEXT, created_at INTEGER NOT NULL);
 `;
 
 export async function openDb(url = process.env.TURSO_DATABASE_URL || `file:${process.env.OTOMO_DB ?? path.join(process.cwd(), "otomo.db")}`): Promise<Client> {

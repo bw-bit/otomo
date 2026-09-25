@@ -6,7 +6,7 @@ import { parseIntent } from "@/lib/intent";
 import { decide } from "@/lib/policy";
 import { createPendingAction } from "@/lib/approval";
 import { companionSystemPrompt, openAiCompatibleChat, personalitySchema, type ChatMessage } from "@/lib/llm";
-import { agentAllowanceUsdc, agentSetMood, isCompanion, resolveName } from "@/lib/chain";
+import { agentAllowanceUsdc, agentSetMood, isCompanion, resolveName, usdcBalanceOf } from "@/lib/chain";
 import { SESSION_COOKIE, readSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -36,6 +36,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     ], "write");
 
     const decision = await decide(intent, {
+      owner: c.owner as Address,
+      ownerUsdcBalance: usdcBalanceOf,
       agentAllowanceUsdc: await agentAllowanceUsdc(c.owner as Address),
       resolveName,
       isCompanion,

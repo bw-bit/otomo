@@ -54,6 +54,7 @@ export function companionSystemPrompt(label: string, fullName: string, p: Person
     '{"type":"send_usdc","to":"<ENS名 or 0x>","amountUsdc":数値,"memo":"..."}  送金を頼まれた時',
     '{"type":"request_friend","friend":"<相棒のENS名>","task":"...","rewardUsdc":数値}  友達の相棒に仕事を頼む時',
     '{"type":"private_task","summary":"..."}  人に見せない個人的な頼みごと',
+    '{"type":"grow_savings","amountUsdc":数値,"days":1〜30の整数}  「お金を増やして」「貯金を運用して」と頼まれた時（days省略時は7）。資金は持ち主のウォレットから出ず、1inch Aqua の 0.3% 手数料 AMM 戦略に載せることを説明してから返す',
     "実行は持ち主の顔による承認の後にシステムが行う。あなたが実行したと言ってはいけない。",
   ].join("\n");
 }

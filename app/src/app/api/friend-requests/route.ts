@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getDb, type Companion } from "@/lib/db";
 import { createPendingAction } from "@/lib/approval";
 import { decide } from "@/lib/policy";
-import { agentAllowanceUsdc, isCompanion, resolveName } from "@/lib/chain";
+import { agentAllowanceUsdc, isCompanion, resolveName, usdcBalanceOf } from "@/lib/chain";
 import { SESSION_COOKIE, readSession } from "@/lib/session";
 import type { Address } from "viem";
 
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       const to = (await db.execute({ sql: `SELECT * FROM companions WHERE label = ?`, args: [r.to_label] })).rows[0] as unknown as Companion | undefined;
       if (from && to) {
         const intent = { type: "send_usdc" as const, to: to.full_name, amountUsdc: r.reward_usdc, memo: `reward: ${r.task}` };
-        const decision = await decide(intent, { agentAllowanceUsdc: await agentAllowanceUsdc(from.owner as Address), resolveName, isCompanion });
+        const decision = await decide(intent, { owner: from.owner as Address, ownerUsdcBalance: usdcBalanceOf, agentAllowanceUsdc: await agentAllowanceUsdc(from.owner as Address), resolveName, isCompanion });
         if (decision.kind === "needs_approval")
           await createPendingAction(db, { companion: from.label, intent, resolvedTo: decision.resolvedTo, amountUsdc: decision.amountUsdc, now: Date.now() });
         else console.warn("[friend] reward not queued", decision);

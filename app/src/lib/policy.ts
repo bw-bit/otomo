@@ -11,6 +11,10 @@ export type PolicyDecision =
   | { kind: "reject"; reason: string };
 
 export interface PolicyContext {
+  /** The companion owner's wallet address. */
+  owner: Address;
+  /** Owner's MockUSDC balance, in USDC units. */
+  ownerUsdcBalance: (owner: Address) => Promise<number>;
   /** Remaining on-chain MockUSDC allowance the owner granted to the agent, in USDC units. */
   agentAllowanceUsdc: number;
   resolveName: (nameOrAddress: string) => Promise<Address | null>;
@@ -39,6 +43,15 @@ export async function decide(intent: Intent, ctx: PolicyContext): Promise<Policy
       const to = await ctx.resolveName(intent.to);
       if (!to) return { kind: "reject", reason: `${intent.to} を解決できませんでした` };
       return { kind: "needs_approval", intent, resolvedTo: to, amountUsdc: intent.amountUsdc };
+    }
+    case "grow_savings": {
+      // The agent never moves funds — shipping is the owner's own wallet action,
+      // so the per-payment cap / agent allowance do not apply; the owner just
+      // needs to actually hold the USDC.
+      const balance = await ctx.ownerUsdcBalance(ctx.owner);
+      if (intent.amountUsdc > balance)
+        return { kind: "reject", reason: `ウォレットの USDC が足りません（残高 ${balance} USDC）` };
+      return { kind: "needs_approval", intent, amountUsdc: intent.amountUsdc };
     }
     case "request_friend": {
       if (!(await ctx.isCompanion(intent.friend)))

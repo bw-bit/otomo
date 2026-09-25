@@ -18,6 +18,11 @@ export const intentSchema = z.discriminatedUnion("type", [
     memo: z.string().trim().max(200).default(""),
   }),
   z.object({ type: z.literal("private_task"), summary: z.string().trim().min(1).max(500) }),
+  z.object({
+    type: z.literal("grow_savings"),
+    amountUsdc: z.number().positive().max(10_000),
+    days: z.number().int().min(1).max(30).default(7),
+  }),
 ]);
 
 export type Intent = z.infer<typeof intentSchema>;

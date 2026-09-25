@@ -37,7 +37,7 @@ export function publicClient() {
   return createPublicClient({ chain: sepolia, transport: http(SEPOLIA_RPC_URL) });
 }
 
-function walletFor(envKey: "OPERATOR_PRIVATE_KEY" | "AGENT_PRIVATE_KEY") {
+export function walletFor(envKey: "OPERATOR_PRIVATE_KEY" | "AGENT_PRIVATE_KEY") {
   const e = requireEnv("SEPOLIA_RPC_URL", envKey);
   const account = privateKeyToAccount(e[envKey] as Hex);
   return createWalletClient({ account, chain: sepolia, transport: http(e.SEPOLIA_RPC_URL) });
@@ -70,6 +70,17 @@ export async function agentAllowanceUsdc(owner: Address): Promise<number> {
     abi: erc20Abi,
     functionName: "allowance",
     args: [owner, agentAddress()],
+  });
+  return Number(formatUnits(raw, USDC_DECIMALS));
+}
+
+/** Owner's MockUSDC balance, in USDC units. */
+export async function usdcBalanceOf(owner: Address): Promise<number> {
+  const raw = await publicClient().readContract({
+    address: ENS_SEPOLIA.mockUsdc,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: [owner],
   });
   return Number(formatUnits(raw, USDC_DECIMALS));
 }
