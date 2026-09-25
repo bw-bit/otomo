@@ -8,6 +8,7 @@ import {
   http,
   isAddress,
   parseEventLogs,
+  parseEther,
   parseUnits,
   type Address,
   type Hex,
@@ -201,5 +202,15 @@ export async function companionSetText(c: Companion, key: string, value: string)
   const wallet = await companionWallet(await getDb(), c.label);
   const hash = await wallet.writeContract({ address: c.resolver as Address, abi: resolverAbi, functionName: "setText", args: [dnsEncode(c.full_name), key, value] });
   if ((await publicClient().waitForTransactionReceipt({ hash })).status !== "success") throw new Error("ENS update reverted");
+  return hash;
+}
+
+/** Fresh companion wallets start empty; the operator seeds them with enough Sepolia gas for their first moves. */
+export async function fundCompanionGas(to: Address): Promise<Hex> {
+  if (await publicClient().getChainId() !== sepolia.id) throw new Error("Sepolia RPC required");
+  const amount = parseEther(process.env.COMPANION_GAS_ETH?.trim() || "0.02");
+  const operator = walletFor("OPERATOR_PRIVATE_KEY");
+  const hash = await operator.sendTransaction({ to, value: amount });
+  if ((await publicClient().waitForTransactionReceipt({ hash })).status !== "success") throw new Error("gas funding reverted");
   return hash;
 }

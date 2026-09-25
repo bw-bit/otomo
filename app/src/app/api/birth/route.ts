@@ -7,7 +7,7 @@ import { optionalNumberEnv, requireEnv } from "@/lib/env";
 import { checkBirthProof, type BirthPayload } from "@/lib/birth";
 import { normalizeCompanionLabel } from "@/lib/ens";
 import { generatePersonality, openAiCompatibleChat } from "@/lib/llm";
-import { publicClient, issueCompanionName } from "@/lib/chain";
+import { publicClient, issueCompanionName, fundCompanionGas } from "@/lib/chain";
 import { SESSION_COOKIE, sessionValue } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       { sql: "INSERT INTO birth_provisioning VALUES (?, 'running', NULL, NULL)", args: [label] },
     ], "write");
     reservedLabel = label;
+    await fundCompanionGas(wallet.address);
     const issued = await issueCompanionName({
       label,
       grantAgentInInit,
