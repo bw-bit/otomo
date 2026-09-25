@@ -96,3 +96,9 @@ operator 鍵で1回だけ実行。各ステップは既に済んでいれば飛�
 - `README.md`: 一文要約、構成図、各スポンサー技術を使っているファイルと行、セットアップ手順。
 - `docs/world-debrief.md`: 振り返りの雛形（実際の数値は lead が記入）。
 - AI 利用の明記。
+
+## 実装状況
+
+- 本 SPEC は実装済み（`npm test` 33件、`npm run lint`、`npm run build` 通過）。
+- 追加で SPEC-2 の Aqua 連携が入っている: intent に `grow_savings`（`src/lib/intent.ts`）、`strategies` テーブル、`src/lib/aqua.ts`、`/api/strategies`・`/api/strategies/[id]`、相棒ページの「貯金の運用」セクション、contracts 側の `OtomoOrderBuilder`（maker 側 trait パッキングのオンチェーン化）。Aqua 上で maker=ユーザー自身が ship/dock し、agent 鍵はデモ taker のみ（資金移動はユーザーの ship 以外に書かせない）。
+- 未実施: Aqua スタックの実 Sepolia デプロイ（資金待ち）、`docs/world-debrief.md`。
