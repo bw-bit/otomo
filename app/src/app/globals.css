@@ -1,0 +1,32 @@
+:root {
+  --bg: #0b0d1a;
+  --panel: rgba(255, 255, 255, 0.06);
+  --line: rgba(255, 255, 255, 0.12);
+  --text: #eef0ff;
+  --muted: #a3a8c7;
+  --accent: #b9a6ff;
+  --ng: #ff9a9a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: radial-gradient(120% 90% at 50% 20%, #1a1d3a 0%, var(--bg) 60%); color: var(--text); font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif; }
+a { color: var(--accent); }
+.stage { position: relative; min-height: 100dvh; display: grid; grid-template-rows: 1fr auto; }
+.scene { position: absolute; inset: 0; }
+.scene canvas { width: 100%; height: 100%; display: block; }
+.panel { position: relative; z-index: 1; margin: 0 auto 32px; width: min(520px, calc(100% - 32px)); padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); backdrop-filter: blur(12px); }
+.panel h1 { margin: 0 0 4px; font-size: 22px; }
+.panel p { margin: 6px 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+input, textarea { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0,0,0,0.25); color: var(--text); font-size: 15px; }
+button { padding: 10px 16px; border-radius: 10px; border: 0; background: var(--accent); color: #151329; font-weight: 700; font-size: 15px; cursor: pointer; transition: transform 100ms ease-out, opacity 150ms; }
+button:active { transform: scale(0.96); }
+button:disabled { opacity: 0.45; cursor: default; }
+button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+.ng { color: var(--ng) !important; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
+.chat { display: flex; flex-direction: column; gap: 8px; max-height: 36vh; overflow-y: auto; margin-top: 12px; }
+.msg { padding: 8px 12px; border-radius: 12px; font-size: 14px; line-height: 1.6; max-width: 85%; white-space: pre-wrap; }
+.msg.user { align-self: flex-end; background: rgba(185,166,255,0.2); }
+.msg.assistant { align-self: flex-start; background: rgba(255,255,255,0.08); }
+.card { margin-top: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { button { transition: none; } }
