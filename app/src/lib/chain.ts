@@ -1,4 +1,6 @@
 import "server-only";
+import { getDb, type Companion } from "./db";
+import { companionWallet, hasCompanionWallet } from "./companion-wallet";
 import {
   createPublicClient,
   createWalletClient,
@@ -97,16 +99,18 @@ export interface IssueResult {
  * then registers `<label>.<parent>.eth` in the parent's UserRegistry without transfer rights.
  */
 export async function issueCompanionName(
-  p: { label: string; records: CompanionRecords; grantAgentInInit: boolean },
+  p: { label: string; records: CompanionRecords; grantAgentInInit: boolean; existingResolver?: Address; onResolver?: (resolver: Address) => Promise<void> },
 ): Promise<IssueResult> {
   const { ENS_USER_REGISTRY } = requireEnv("ENS_USER_REGISTRY");
   const client = publicClient();
+  if (await client.getChainId() !== sepolia.id) throw new Error("Sepolia RPC required");
   const operator = walletFor("OPERATOR_PRIVATE_KEY");
   const agent = p.grantAgentInInit ? agentAddress() : null;
 
+  let resolver = p.existingResolver;
   let version = 0n;
   let resolverTx: Hex | undefined;
-  for (; version < 20n; version++) {
+  for (; !resolver && version < 20n; version++) {
     const salt = resolverSalt(p.records.owner, version);
     const data = companionResolverInitData(p.records.owner, companionInitCalls(p.records, agent));
     try {
@@ -128,12 +132,15 @@ export async function issueCompanionName(
     });
     break;
   }
-  if (!resolverTx) throw new Error("resolver deployment simulation failed for every version");
-  const receipt = await client.waitForTransactionReceipt({ hash: resolverTx });
-  if (receipt.status !== "success") throw new Error(`resolver deployment reverted: ${resolverTx}`);
-  const [log] = parseEventLogs({ abi: verifiableFactoryAbi, eventName: "ProxyDeployed", logs: receipt.logs });
-  if (!log) throw new Error("ProxyDeployed event not found");
-  const resolver = log.args.proxyAddress;
+  if (!resolver) {
+    if (!resolverTx) throw new Error("resolver deployment simulation failed for every version");
+    const receipt = await client.waitForTransactionReceipt({ hash: resolverTx });
+    if (receipt.status !== "success") throw new Error(`resolver deployment reverted: ${resolverTx}`);
+    const [log] = parseEventLogs({ abi: verifiableFactoryAbi, eventName: "ProxyDeployed", logs: receipt.logs });
+    if (!log) throw new Error("ProxyDeployed event not found");
+    resolver = log.args.proxyAddress;
+    if (p.onResolver) await p.onResolver(resolver);
+  }
 
   const expiry = BigInt(Math.floor(Date.now() / 1000) + 365 * 24 * 3600);
   const registerTx = await operator.writeContract({
@@ -145,7 +152,7 @@ export async function issueCompanionName(
   const reg = await client.waitForTransactionReceipt({ hash: registerTx });
   if (reg.status !== "success") throw new Error(`subname registration reverted: ${registerTx}`);
 
-  return { resolver, resolverTx, registerTx, agentGrantedInInit: p.grantAgentInInit };
+  return { resolver, resolverTx: resolverTx ?? "0x", registerTx, agentGrantedInInit: p.grantAgentInInit };
 }
 
 /** Agent key: only allowed to write `otomo.mood` on this resolver (scoped via grantSetterRoles). */
@@ -163,7 +170,7 @@ export async function agentSetMood(resolver: Address, fullName: string, mood: st
 }
 
 /** Agent key: moves MockUSDC from the owner within the allowance the owner granted on-chain. */
-export async function agentTransferUsdc(owner: Address, to: Address, amountUsdc: number): Promise<Hex> {
+export async function agentTransferUsdc(owner: Address, to: Address, amountUsdc: number, onSubmitted?: (hash: Hex) => Promise<void>): Promise<Hex> {
   const agent = walletFor("AGENT_PRIVATE_KEY");
   const hash = await agent.writeContract({
     address: ENS_SEPOLIA.mockUsdc,
@@ -171,7 +178,28 @@ export async function agentTransferUsdc(owner: Address, to: Address, amountUsdc:
     functionName: "transferFrom",
     args: [owner, to, parseUnits(String(amountUsdc), USDC_DECIMALS)],
   });
+  if (onSubmitted) await onSubmitted(hash);
   const r = await publicClient().waitForTransactionReceipt({ hash });
   if (r.status !== "success") throw new Error(`transferFrom reverted: ${hash}`);
+  return hash;
+}
+
+/** A walletless companion spends its own test tokens, never a user's allowance. */
+export async function companionTransferUsdc(c: Companion, to: Address, amount: number, onSubmitted?: (hash: Hex) => Promise<void>): Promise<Hex> {
+  const db = await getDb();
+  if (!(await hasCompanionWallet(db, c.label))) return agentTransferUsdc(c.owner as Address, to, amount, onSubmitted);
+  if (await publicClient().getChainId() !== sepolia.id) throw new Error("Sepolia RPC required");
+  const wallet = await companionWallet(db, c.label);
+  const hash = await wallet.writeContract({ address: ENS_SEPOLIA.mockUsdc, abi: erc20Abi, functionName: "transfer", args: [to, parseUnits(String(amount), USDC_DECIMALS)] });
+  if (onSubmitted) await onSubmitted(hash);
+  if ((await publicClient().waitForTransactionReceipt({ hash })).status !== "success") throw new Error("Payment reverted");
+  return hash;
+}
+
+export async function companionSetText(c: Companion, key: string, value: string): Promise<Hex> {
+  if (await publicClient().getChainId() !== sepolia.id) throw new Error("Sepolia RPC required");
+  const wallet = await companionWallet(await getDb(), c.label);
+  const hash = await wallet.writeContract({ address: c.resolver as Address, abi: resolverAbi, functionName: "setText", args: [dnsEncode(c.full_name), key, value] });
+  if ((await publicClient().waitForTransactionReceipt({ hash })).status !== "success") throw new Error("ENS update reverted");
   return hash;
 }

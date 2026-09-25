@@ -119,7 +119,7 @@ export async function handleAuthCallback(input: CallbackInput, deps: CallbackDep
     return { ok: true, kind: "approve", actionId: action.id, txHash };
   } catch (e) {
     const reason = `実行に失敗しました: ${e instanceof Error ? e.message : String(e)}`;
-    await db.execute({ sql: `UPDATE pending_actions SET status = 'rejected', reason = ? WHERE id = ?`, args: [reason, action.id] });
+    await db.execute({ sql: `UPDATE pending_actions SET status = CASE WHEN tx_hash IS NULL THEN 'rejected' ELSE 'executed' END, reason = CASE WHEN tx_hash IS NULL THEN ? ELSE 'confirmation_pending' END WHERE id = ?`, args: [reason, action.id] });
     return { ok: false, reason, actionId: action.id };
   }
 }

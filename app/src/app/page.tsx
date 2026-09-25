@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useAccount, useConnect, useWriteContract } from "wagmi";
 import { IDKitRequestWidget, CredentialRequest, any, type IDKitResult, type RpContext } from "@worldcoin/idkit";
 import { BirthScene, type BirthPhase } from "@/components/BirthScene";
 import { BIRTH_ACTION } from "@/lib/birth";
-import { MOOD_KEY, resolverAbi, textSetterFor } from "@/lib/ens";
 
 const APP_ID = process.env.NEXT_PUBLIC_WORLD_APP_ID as `app_${string}` | undefined;
 const WORLD_ENV = (process.env.NEXT_PUBLIC_WORLD_ENV ?? "staging") as "production" | "staging" | "sandbox";
@@ -21,54 +19,19 @@ interface Born {
 }
 
 export default function BirthPage() {
-  const { address, isConnected } = useAccount();
-  const { connectAsync, connectors, isPending: isConnecting } = useConnect();
-  const { writeContractAsync } = useWriteContract();
   const [label, setLabel] = useState("");
   const [hint, setHint] = useState("");
   const [phase, setPhase] = useState<BirthPhase>("idle");
   const [rp, setRp] = useState<RpContext | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [walletError, setWalletError] = useState<string | null>(null);
+  const [signal, setSignal] = useState("");
+  const [mode, setMode] = useState<"birth" | "login">("birth");
   const [born, setBorn] = useState<Born | null>(null);
-  const [agentAddr, setAgentAddr] = useState<`0x${string}` | null>(null);
-  const [grantTx, setGrantTx] = useState<string | null>(null);
-
   const fail = (msg: string) => {
     setError(msg);
     setPhase("failed");
     setTimeout(() => setPhase((p) => (p === "failed" ? "idle" : p)), 2600);
-  };
-
-  const connectWallet = async () => {
-    setWalletError(null);
-    const connector = connectors[0];
-    if (!connector) {
-      setWalletError("EVMウォレットが見つかりません。MetaMaskなどの拡張機能を有効にしてください。");
-      return;
-    }
-    try {
-      await connectAsync({ connector });
-    } catch (cause) {
-      const parts: string[] = [];
-      let current: unknown = cause;
-      for (let depth = 0; depth < 4 && current && typeof current === "object"; depth++) {
-        const item = current as { name?: unknown; message?: unknown; code?: unknown; cause?: unknown };
-        for (const value of [item.name, item.message, item.code]) if (typeof value === "string" || typeof value === "number") parts.push(String(value));
-        current = item.cause;
-      }
-      const detail = parts.join(" ");
-      if (/already pending|already processing|request of type .*pending|-32002|resourceunavailablerpcerror/i.test(detail)) {
-        setWalletError("ウォレットの接続要求が保留中です。MetaMaskの拡張機能を開き、承認または拒否してください。");
-      } else if (/provider not found|no provider|injected.*not found/i.test(detail)) {
-        setWalletError("EVMウォレットが見つかりません。MetaMaskなどの拡張機能を有効にしてください。");
-      } else if (/user rejected|user denied|4001/i.test(detail)) {
-        setWalletError("ウォレットで接続がキャンセルされました。");
-      } else {
-        setWalletError("接続できませんでした。ウォレット拡張機能の画面とロック状態を確認してください。");
-      }
-    }
   };
 
   const start = async () => {
@@ -77,6 +40,7 @@ export default function BirthPage() {
     const res = await fetch("/api/world/rp-signature", { method: "POST" });
     const sig = await res.json();
     if (!res.ok) return fail(sig.error ?? "RP 署名の取得に失敗しました");
+    setSignal(sig.signal);
     setRp({ rp_id: sig.rp_id, nonce: sig.nonce, created_at: sig.created_at, expires_at: sig.expires_at, signature: sig.sig });
     setPhase("verifying");
     setOpen(true);
@@ -84,34 +48,19 @@ export default function BirthPage() {
 
   const handleVerify = async (result: IDKitResult) => {
     setPhase("forming");
-    const res = await fetch("/api/birth", {
+    const res = await fetch(mode === "login" ? "/api/login" : "/api/birth", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ label, hint, wallet: address, idkitResult: result }),
+      body: JSON.stringify({ label, hint, idkitResult: result }),
     });
     const body = await res.json();
     if (!res.ok) {
       fail(body.error ?? "誕生に失敗しました");
       throw new Error(body.error);
     }
+    if (mode === "login") { window.location.href = `/otomo/${body.label}`; return; }
     setBorn(body);
     setPhase("born");
-    fetch("/api/companion").then((r) => r.json()).then((c) => c.agent && setAgentAddr(c.agent)).catch(() => {});
-  };
-
-  const grantMood = async () => {
-    if (!born || !agentAddr) return;
-    try {
-      const hash = await writeContractAsync({
-        address: born.resolver,
-        abi: resolverAbi,
-        functionName: "grantSetterRoles",
-        args: [textSetterFor(MOOD_KEY), agentAddr],
-      });
-      setGrantTx(hash);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
   };
 
   return (
@@ -123,30 +72,21 @@ export default function BirthPage() {
           <>
             <h1>世界に一人の相棒を迎える</h1>
             <p>顔の確認（World ID Selfie Check）で、1人に1体だけ相棒が生まれます。顔の画像や個人情報はこのアプリに届きません。</p>
-            {!isConnected ? (
-              <>
-                <div className="row">
-                  <button onClick={connectWallet} disabled={isConnecting}>{isConnecting ? "ウォレットの確認待ち…" : "ウォレットを接続"}</button>
-                </div>
-                <p>MetaMaskなどのEVMウォレットを開き、接続を承認してください。</p>
-                {walletError && <p className="ng" role="alert">{walletError}</p>}
-              </>
-            ) : (
-              <>
-                <p className="mono">{address}</p>
+            <p>ウォレット接続は不要です。相棒はSepolia上の専用テストウォレットを持ちます。</p>
+            <div className="row"><button className="ghost" onClick={() => setMode(mode === "birth" ? "login" : "birth")}>{mode === "birth" ? "すでに相棒がいる方はこちら" : "新しい相棒を迎える"}</button></div>
+            {mode === "birth" && <>
                 <div className="row">
                   <input placeholder="相棒の名前（英小文字・数字・-）" value={label} onChange={(e) => setLabel(e.target.value.toLowerCase())} maxLength={20} />
                 </div>
                 <div className="row">
                   <input placeholder="どんな相棒がいい？（任意）" value={hint} onChange={(e) => setHint(e.target.value)} maxLength={200} />
                 </div>
+            </>}
                 <div className="row">
-                  <button onClick={start} disabled={label.length < 3 || phase === "verifying" || phase === "forming"}>
-                    {phase === "forming" ? "生まれています…" : "顔で誕生させる"}
+                  <button onClick={start} disabled={(mode === "birth" && label.length < 3) || phase === "verifying" || phase === "forming"}>
+                    {phase === "forming" ? "生まれています…" : mode === "login" ? "World IDで相棒に会う" : "顔で誕生させる"}
                   </button>
                 </div>
-              </>
-            )}
             {error && <p className="ng">{error}</p>}
           </>
         ) : (
@@ -158,12 +98,6 @@ export default function BirthPage() {
               この名前は譲渡できません。
               <a href={`https://sepolia.etherscan.io/tx/${born.registerTx}`} target="_blank" rel="noreferrer">登録トランザクション</a>
             </p>
-            {born.needsAgentGrant && (
-              <div className="card">
-                <p>相棒に「気分」だけを書き換える権限を渡します（他のレコードには触れません）。</p>
-                <button onClick={grantMood} disabled={!agentAddr || !!grantTx}>{grantTx ? "渡しました" : "権限を渡す"}</button>
-              </div>
-            )}
             <div className="row">
               <a href="/api/auth/start?kind=bind"><button>World ID で契りを結ぶ</button></a>
               <Link href={`/otomo/${born.label}`}><button className="ghost">相棒と話す</button></Link>
@@ -173,7 +107,7 @@ export default function BirthPage() {
         )}
       </section>
 
-      {rp && APP_ID && address && (
+      {rp && APP_ID && signal && (
         <IDKitRequestWidget
           open={open}
           onOpenChange={setOpen}
@@ -182,7 +116,7 @@ export default function BirthPage() {
           rp_context={rp}
           allow_legacy_proofs={false}
           environment={WORLD_ENV}
-          constraints={any(CredentialRequest("selfie", { signal: address.toLowerCase() }))}
+          constraints={any(CredentialRequest("selfie", { signal }))}
           handleVerify={handleVerify}
           onSuccess={() => setOpen(false)}
           onError={(code) => fail(`顔の確認が完了しませんでした（${code}）`)}

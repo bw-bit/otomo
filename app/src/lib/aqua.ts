@@ -13,7 +13,8 @@ import { requireEnv } from "./env";
 import { publicClient, walletFor, USDC_DECIMALS } from "./chain";
 import { ENS_SEPOLIA, erc20Abi } from "./ens";
 import { aquaAbi, orderBuilderAbi, swapVmAbi } from "./aquaAbi";
-import type { Strategy } from "./db";
+import type { Strategy, Db, Companion } from "./db";
+import { companionWallet } from "./companion-wallet";
 
 export const WETH_DECIMALS = 18;
 /** Sepolia mocks have no market price; the demo seeds the pair at a fixed 2000 USDC per WETH. */
@@ -191,6 +192,7 @@ export async function agentDemoSwap(row: Strategy): Promise<Hex> {
   const client = publicClient();
   const agent = walletFor("AGENT_PRIVATE_KEY");
   const taker = agent.account.address;
+  if (taker.toLowerCase() === row.maker.toLowerCase()) throw new Error("Maker and demo taker must be separate wallets");
   const order = decodeStrategy(row.strategy as Hex);
   const amountIn = parseUnits(DEMO_SWAP_WETH_IN, WETH_DECIMALS);
 
@@ -224,5 +226,39 @@ export async function agentDemoSwap(row: Strategy): Promise<Hex> {
   });
   const receipt = await client.waitForTransactionReceipt({ hash });
   if (receipt.status !== "success") throw new Error(`demo swap reverted: ${hash}`);
+  return hash;
+}
+
+/** Called only after a fresh World ID approval, with the strategy bound to the current companion. */
+export async function executeManagedStrategy(db: Db, c: Companion, id: string, operation: "ship" | "dock" | "demo_swap"): Promise<Hex> {
+  const row = (await db.execute({ sql: "SELECT * FROM strategies WHERE id = ? AND companion = ?", args: [id, c.label] })).rows[0] as unknown as Strategy | undefined;
+  if (!row || row.maker.toLowerCase() !== c.owner.toLowerCase()) throw new Error("Strategy ownership mismatch");
+  const client = publicClient();
+  if (await client.getChainId() !== 11155111) throw new Error("Sepolia RPC required");
+  if (operation === "demo_swap") {
+    if (row.status !== "shipped") throw new Error("Strategy not shipped");
+    return agentDemoSwap(row);
+  }
+  const wallet = await companionWallet(db, c.label);
+  const env = aquaEnv();
+  if (operation === "ship") {
+    if (row.status !== "ready" || row.deadline * 1000 <= Date.now()) throw new Error("Strategy not ready or expired");
+    const args = shipTxParams(row);
+    for (const a of args.approvals) {
+      const current = await client.readContract({ address: a.token, abi: erc20Abi, functionName: "allowance", args: [wallet.account.address, a.spender] });
+      if (current < BigInt(a.amount)) {
+        const hash = await wallet.writeContract({ address: a.token, abi: erc20Abi, functionName: "approve", args: [a.spender, BigInt(a.amount)] });
+        if ((await client.waitForTransactionReceipt({ hash })).status !== "success") throw new Error("Approval reverted");
+      }
+    }
+    const hash = await wallet.writeContract({ address: args.aqua, abi: aquaAbi, functionName: "ship", args: [args.router, args.strategy, args.tokens, args.amounts.map(BigInt)] });
+    const strategyHash = await confirmShip(row, hash);
+    await db.execute({ sql: "UPDATE strategies SET status='shipped', strategy_hash=?, ship_tx=? WHERE id=? AND status='ready'", args: [strategyHash, hash, id] });
+    return hash;
+  }
+  if (row.status !== "shipped" || !row.strategy_hash) throw new Error("Strategy not shipped");
+  const hash = await wallet.writeContract({ address: env.aqua, abi: aquaAbi, functionName: "dock", args: [row.router as Address, row.strategy_hash as Hex, [env.usdc, env.weth]] });
+  await confirmDock(row, hash);
+  await db.execute({ sql: "UPDATE strategies SET status='docked', dock_tx=? WHERE id=? AND status='shipped'", args: [hash, id] });
   return hash;
 }

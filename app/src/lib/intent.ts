@@ -4,6 +4,8 @@ const ensOrAddress = z.string().trim().min(3).max(100);
 
 export const intentSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("none") }),
+  z.object({ type: z.literal("strategy_operation"), strategyId: z.string(), operation: z.enum(["ship", "dock", "demo_swap"]) }),
+  z.object({ type: z.literal("publish_reputation"), snapshot: z.string().max(3000) }),
   z.object({ type: z.literal("update_mood"), mood: z.string().trim().min(1).max(40) }),
   z.object({
     type: z.literal("request_friend"),

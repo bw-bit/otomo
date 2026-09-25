@@ -31,6 +31,9 @@ function checkAmount(amount: number, ctx: PolicyContext): string | null {
 
 export async function decide(intent: Intent, ctx: PolicyContext): Promise<PolicyDecision> {
   switch (intent.type) {
+    case "strategy_operation":
+    case "publish_reputation":
+      return { kind: "reject", reason: "実績カードの公開ボタンから内容を確認してください" };
     case "none":
       return { kind: "noop" };
     case "update_mood":
