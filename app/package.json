@@ -12,9 +12,9 @@
     "keys:init": "node --experimental-strip-types scripts/init-keys.ts"
   },
   "dependencies": {
+    "@libsql/client": "0.18.0",
     "@tanstack/react-query": "5.103.1",
     "@worldcoin/idkit": "4.2.3",
-    "better-sqlite3": "13.0.3",
     "jose": "6.2.12",
     "next": "16.3.5",
     "react": "19.3.0",
@@ -26,7 +26,6 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "9.6.0",
     "@types/node": "22.19.1",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",

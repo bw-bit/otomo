@@ -12,14 +12,18 @@ export async function GET(req: NextRequest): Promise<Response> {
   const label = readSession(req.cookies.get(SESSION_COOKIE)?.value);
   if (!label) return NextResponse.json({ error: "not signed in" }, { status: 401 });
   try {
-    const db = getDb();
-    const c = db.prepare(`SELECT * FROM companions WHERE label = ?`).get(label) as Companion | undefined;
+    const db = await getDb();
+    const c = (await db.execute({ sql: `SELECT * FROM companions WHERE label = ?`, args: [label] })).rows[0] as unknown as Companion | undefined;
     if (!c) return NextResponse.json({ error: "not found" }, { status: 404 });
-    const [address, mood, personality, allowance] = await Promise.all([
+    const [address, mood, personality, allowance, actions, inbox, outbox, messages] = await Promise.all([
       resolveName(c.full_name),
       readText(c.full_name, MOOD_KEY),
       readText(c.full_name, PERSONALITY_KEY),
       agentAllowanceUsdc(c.owner as Address),
+      db.execute({ sql: `SELECT * FROM pending_actions WHERE companion = ? ORDER BY created_at DESC LIMIT 20`, args: [label] }),
+      db.execute({ sql: `SELECT * FROM friend_requests WHERE to_label = ? ORDER BY created_at DESC`, args: [label] }),
+      db.execute({ sql: `SELECT * FROM friend_requests WHERE from_label = ? ORDER BY created_at DESC`, args: [label] }),
+      db.execute({ sql: `SELECT role, content FROM messages WHERE companion = ? ORDER BY id DESC LIMIT 30`, args: [label] }),
     ]);
     return NextResponse.json({
       label: c.label,
@@ -30,10 +34,10 @@ export async function GET(req: NextRequest): Promise<Response> {
       agent: agentAddress(),
       ens: { address, mood, personality },
       allowanceUsdc: allowance,
-      actions: db.prepare(`SELECT * FROM pending_actions WHERE companion = ? ORDER BY created_at DESC LIMIT 20`).all(label),
-      inbox: db.prepare(`SELECT * FROM friend_requests WHERE to_label = ? ORDER BY created_at DESC`).all(label),
-      outbox: db.prepare(`SELECT * FROM friend_requests WHERE from_label = ? ORDER BY created_at DESC`).all(label),
-      messages: db.prepare(`SELECT role, content FROM messages WHERE companion = ? ORDER BY id DESC LIMIT 30`).all(label).reverse(),
+      actions: actions.rows,
+      inbox: inbox.rows,
+      outbox: outbox.rows,
+      messages: [...messages.rows].reverse(),
     });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });

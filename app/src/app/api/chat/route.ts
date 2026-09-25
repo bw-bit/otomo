@@ -20,21 +20,20 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!body.success) return NextResponse.json({ error: body.error.message }, { status: 400 });
 
   try {
-    const db = getDb();
-    const c = db.prepare(`SELECT * FROM companions WHERE label = ?`).get(label) as Companion | undefined;
+    const db = await getDb();
+    const c = (await db.execute({ sql: `SELECT * FROM companions WHERE label = ?`, args: [label] })).rows[0] as unknown as Companion | undefined;
     if (!c) return NextResponse.json({ error: "相棒が見つかりません" }, { status: 404 });
 
-    const history = db
-      .prepare(`SELECT role, content FROM messages WHERE companion = ? ORDER BY id DESC LIMIT 12`)
-      .all(label)
-      .reverse() as ChatMessage[];
+    const history = [...(await db.execute({ sql: `SELECT role, content FROM messages WHERE companion = ? ORDER BY id DESC LIMIT 12`, args: [label] })).rows].reverse() as unknown as ChatMessage[];
     const system = companionSystemPrompt(c.label, c.full_name, personalitySchema.parse(JSON.parse(c.personality)));
     const reply = await openAiCompatibleChat([{ role: "system", content: system }, ...history, { role: "user", content: body.data.message }]);
     const { text, intent } = parseIntent(reply);
 
-    const insert = db.prepare(`INSERT INTO messages (companion, role, content, created_at) VALUES (?,?,?,?)`);
-    insert.run(label, "user", body.data.message, Date.now());
-    insert.run(label, "assistant", text, Date.now());
+    const insertSql = `INSERT INTO messages (companion, role, content, created_at) VALUES (?,?,?,?)`;
+    await db.batch([
+      { sql: insertSql, args: [label, "user", body.data.message, Date.now()] },
+      { sql: insertSql, args: [label, "assistant", text, Date.now()] },
+    ], "write");
 
     const decision = await decide(intent, {
       agentAllowanceUsdc: await agentAllowanceUsdc(c.owner as Address),
@@ -53,7 +52,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         return NextResponse.json({ text, decision, txHash });
       }
       case "needs_approval": {
-        const action = createPendingAction(db, {
+        const action = await createPendingAction(db, {
           companion: label,
           intent: decision.intent,
           resolvedTo: decision.resolvedTo,

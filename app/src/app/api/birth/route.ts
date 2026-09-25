@@ -3,7 +3,7 @@ import { isAddress, type Address } from "viem";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
 import { optionalNumberEnv, requireEnv } from "@/lib/env";
-import { checkBirthProof, markNullifierUsed, type BirthPayload } from "@/lib/birth";
+import { checkBirthProof, type BirthPayload } from "@/lib/birth";
 import { normalizeCompanionLabel } from "@/lib/ens";
 import { generatePersonality, openAiCompatibleChat } from "@/lib/llm";
 import { issueCompanionName } from "@/lib/chain";
@@ -30,8 +30,8 @@ export async function POST(req: Request): Promise<Response> {
   try {
     const env = requireEnv("WORLD_RP_ID", "ENS_PARENT_LABEL", "APP_SECRET");
     const label = normalizeCompanionLabel(parsed.data.label);
-    const db = getDb();
-    if (db.prepare(`SELECT 1 FROM companions WHERE label = ? OR owner = ?`).get(label, wallet.toLowerCase()))
+    const db = await getDb();
+    if ((await db.execute({ sql: `SELECT 1 FROM companions WHERE label = ? OR owner = ?`, args: [label, wallet.toLowerCase()] })).rows[0])
       return NextResponse.json({ error: "その名前、またはこのウォレットの相棒はすでに存在します" }, { status: 409 });
 
     const check = await checkBirthProof(payload, wallet, {
@@ -65,12 +65,13 @@ export async function POST(req: Request): Promise<Response> {
       },
     });
 
-    db.transaction(() => {
-      markNullifierUsed(db, check.nullifier, Date.now());
-      db.prepare(`INSERT INTO companions VALUES (?,?,?,?,?,?,?,?)`).run(
-        label, fullName, wallet.toLowerCase(), issued.resolver, JSON.stringify(personality), check.nullifier, null, Date.now(),
-      );
-    })();
+    const now = Date.now();
+    await db.batch([
+      { sql: `INSERT INTO used_nullifiers VALUES (?, ?)`, args: [check.nullifier, now] },
+      { sql: `INSERT INTO companions VALUES (?,?,?,?,?,?,?,?)`, args: [
+        label, fullName, wallet.toLowerCase(), issued.resolver, JSON.stringify(personality), check.nullifier, null, now,
+      ] },
+    ], "write");
 
     const res = NextResponse.json({ label, fullName, personality, ...issued, needsAgentGrant: !issued.agentGrantedInInit });
     res.cookies.set(SESSION_COOKIE, sessionValue(label), { httpOnly: true, sameSite: "lax", path: "/" });

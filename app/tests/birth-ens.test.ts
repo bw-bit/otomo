@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { decodeFunctionData, toHex } from "viem";
 import { hashSignal } from "@worldcoin/idkit/hashing";
 import { openDb, type Db } from "@/lib/db";
@@ -23,7 +26,12 @@ const payload = (over: Partial<BirthPayload["responses"][0]> = {}): BirthPayload
 });
 
 let db: Db;
-beforeEach(() => (db = openDb(":memory:")));
+let dir: string;
+beforeEach(async () => {
+  dir = await mkdtemp(path.join(tmpdir(), "otomo-birth-"));
+  db = await openDb(`file:${path.join(dir, "test.db")}`);
+});
+afterEach(async () => { db.close(); await rm(dir, { recursive: true, force: true }); });
 const ok = vi.fn(async () => ({ ok: true, detail: "" }));
 
 describe("birth proof", () => {
@@ -39,8 +47,15 @@ describe("birth proof", () => {
     expect(r).toMatchObject({ ok: false, code: "signal_mismatch" });
   });
   it("allows one companion per World ID (nullifier)", async () => {
-    markNullifierUsed(db, "0xnull", 1);
+    await markNullifierUsed(db, "0xnull", 1);
     expect(await checkBirthProof(payload(), WALLET, { db, verifyWithPortal: ok })).toMatchObject({ ok: false, code: "duplicate" });
+  });
+  it("rolls back a nullifier insert when the companion insert fails", async () => {
+    await expect(db.batch([
+      { sql: `INSERT INTO used_nullifiers VALUES (?, ?)`, args: ["0xnull", 1] },
+      { sql: `INSERT INTO companions VALUES (?,?,?,?,?,?,?,?)`, args: ["taro", "taro.otomo.eth", "0xowner", "0xres", "{}", "0xnull", null, null] },
+    ], "write")).rejects.toThrow();
+    expect((await db.execute({ sql: `SELECT 1 FROM used_nullifiers WHERE nullifier = ?`, args: ["0xnull"] })).rows).toHaveLength(0);
   });
   it("rejects high sybil risk when a threshold is configured", async () => {
     const r = await checkBirthProof(payload({ sybil_score: 9 }), WALLET, { db, verifyWithPortal: ok, sybilMax: 3 });

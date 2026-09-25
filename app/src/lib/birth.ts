@@ -43,7 +43,7 @@ export async function checkBirthProof(payload: BirthPayload, walletAddress: stri
   if (!item.signal_hash || item.signal_hash.toLowerCase() !== expected)
     return { ok: false, code: "signal_mismatch", reason: "証明が接続中のウォレットに紐付いていません" };
 
-  const used = deps.db.prepare(`SELECT 1 FROM used_nullifiers WHERE nullifier = ?`).get(item.nullifier);
+  const used = (await deps.db.execute({ sql: `SELECT 1 FROM used_nullifiers WHERE nullifier = ?`, args: [item.nullifier] })).rows[0];
   if (used) return { ok: false, code: "duplicate", reason: "この World ID ではすでに相棒が生まれています（1人1体）" };
 
   const score = typeof item.sybil_score === "number" ? item.sybil_score : null;
@@ -53,6 +53,6 @@ export async function checkBirthProof(payload: BirthPayload, walletAddress: stri
   return { ok: true, nullifier: item.nullifier, sybilScore: score };
 }
 
-export function markNullifierUsed(db: Db, nullifier: string, now: number) {
-  db.prepare(`INSERT INTO used_nullifiers VALUES (?, ?)`).run(nullifier, now);
+export async function markNullifierUsed(db: Db, nullifier: string, now: number) {
+  await db.execute({ sql: `INSERT INTO used_nullifiers VALUES (?, ?)`, args: [nullifier, now] });
 }

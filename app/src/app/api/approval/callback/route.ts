@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest): Promise<Response> {
   const q = req.nextUrl.searchParams;
-  const db = getDb();
+  const db = await getDb();
   const cfg = agentOidcConfig();
   const result = await handleAuthCallback(
     { state: q.get("state"), code: q.get("code"), error: q.get("error"), now: Date.now() },

@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import { createClient, type Client } from "@libsql/client";
 import path from "node:path";
 
 export interface Companion {
@@ -53,14 +53,20 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at INTEGER NOT NULL);
 `;
 
-export function openDb(file = process.env.OTOMO_DB ?? path.join(process.cwd(), "otomo.db")) {
-  const db = new Database(file);
-  db.pragma("journal_mode = WAL");
-  db.exec(SCHEMA);
+export async function openDb(url = process.env.TURSO_DATABASE_URL || `file:${process.env.OTOMO_DB ?? path.join(process.cwd(), "otomo.db")}`): Promise<Client> {
+  if (process.env.VERCEL && (!process.env.TURSO_DATABASE_URL || url.startsWith("file:"))) throw new Error("A remote TURSO_DATABASE_URL is required on Vercel");
+  if (!url.startsWith("file:") && !process.env.TURSO_AUTH_TOKEN) throw new Error("TURSO_AUTH_TOKEN is required for the remote database");
+  const db = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN || undefined });
+  try {
+    for (const sql of SCHEMA.split(";").map((s) => s.trim()).filter(Boolean)) await db.execute(sql);
+  } catch (error) {
+    db.close();
+    throw error;
+  }
   return db;
 }
 
-export type Db = ReturnType<typeof openDb>;
+export type Db = Client;
 
-let singleton: Db | undefined;
-export const getDb = () => (singleton ??= openDb());
+let singleton: Promise<Db> | undefined;
+export const getDb = () => (singleton ??= openDb().catch((error) => { singleton = undefined; throw error; }));

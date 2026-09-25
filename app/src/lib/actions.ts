@@ -14,9 +14,9 @@ export async function executeApprovedAction(db: Db, action: PendingAction, compa
       return { txHash: await agentTransferUsdc(companion.owner as Address, action.resolved_to as Address, action.amount_usdc) };
     case "request_friend": {
       const toLabel = intent.friend.split(".")[0];
-      db.prepare(`INSERT INTO friend_requests VALUES (?,?,?,?,?,?,?)`).run(
+      await db.execute({ sql: `INSERT INTO friend_requests VALUES (?,?,?,?,?,?,?)`, args: [
         randomUUID(), companion.label, toLabel, intent.task, intent.rewardUsdc, "open", Date.now(),
-      );
+      ] });
       return {};
     }
     case "private_task":
