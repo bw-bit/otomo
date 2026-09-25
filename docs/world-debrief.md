@@ -4,7 +4,7 @@
 
 ## 1. なぜこの credential を選んだか
 
-誕生の入口には **Selfie Check（issuer_schema_id 11）** を選んだ。
+誕生の入口は **Selfie Check（issuer_schema_id 11）** を主軸に、**パスポート（9303）・マイナンバーカード（9310）・Proof of Human（1）** も受け付ける（`any()` 制約）。端末や地域で Selfie Check が使えないユーザーでも、手持ちの NFC 文書や Orb 認証で誕生できる。
 
 - Otomo の要件は「1人1体の相棒」＝一意の人間性の証明であり、パスポートや Orb 級の強度は不要だった
 - Orb は会場物理デバイス前提でハッカソンのデモ相手が使えない。Selfie Check は World App だけで完結し、参加者全員が試せる最低限の摩擦で済む

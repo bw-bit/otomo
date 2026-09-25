@@ -1,12 +1,12 @@
 # Otomo
 
-**English summary:** Otomo ("companion" in Japanese) gives every verified human exactly one AI companion — no wallet connect needed. Each companion owns its own encrypted wallet, its own non-transferable ENSv2 subname with a dedicated Permissioned Resolver, and manages savings via 1inch Aqua + SwapVM **without funds ever leaving the companion's wallet**. Every consequential action requires a fresh face-level approval from its human via World ID for Agents (OIDC `prompt=login`). One human, one companion — enforced by World Selfie Check nullifiers.
+**English summary:** Otomo ("companion" in Japanese) gives every verified human exactly one AI companion — no wallet connect needed. Each companion owns its own encrypted wallet, its own non-transferable ENSv2 subname with a dedicated Permissioned Resolver, and manages savings via 1inch Aqua + SwapVM **without funds ever leaving the companion's wallet**. Every consequential action requires a fresh face-level approval from its human via World ID for Agents (OIDC `prompt=login`). One human, one companion — enforced by World ID nullifiers (Selfie Check, NFC passport, My Number Card, or Orb).
 
 ---
 
 ## Otomo とは
 
-Otomo は、World ID の Selfie Check で本人確認した人間に1体だけ生まれる「相棒」です。**MetaMask 等のウォレット接続は不要** — 相棒は誕生時に専用ウォレット（AES-256-GCM で暗号化してサーバー保管）を持ち、自分の ENSv2 サブネーム（`<label>.otomo.eth`、譲渡不可）を自分で所有し、自分の資金を自分で動かします。人間は World ID で「この相棒のパートナー」として証明するだけです。
+Otomo は、World ID で本人確認した人間（Selfie Check / NFCパスポート / マイナンバー / Orb のいずれか）に1体だけ生まれる「相棒」です。**MetaMask 等のウォレット接続は不要** — 相棒は誕生時に専用ウォレット（AES-256-GCM で暗号化してサーバー保管）を持ち、自分の ENSv2 サブネーム（`<label>.otomo.eth`、譲渡不可）を自分で所有し、自分の資金を自分で動かします。人間は World ID で「この相棒のパートナー」として証明するだけです。
 
 相棒はチャットと音声会話（Gemini Live）で依頼を受けますが、LLM の出力は権限になりません — 送金・運用・外部依頼などの重要な操作はすべて決定的なポリシーコードで判定され、World ID for Agents による**その場の顔での承認**を通った時だけ実行されます。
 
@@ -14,7 +14,7 @@ Otomo は、World ID の Selfie Check で本人確認した人間に1体だけ�
 
 ## 3分デモの流れ
 
-1. **誕生**: `/` で名前を入力 → 「顔で誕生させる」。World IDKit（Selfie Check, action=`otomo-birth`, signal=サーバー発行の一度きり誕生チャレンジ）→ サーバーが `developer.world.org/api/v4/verify/{rp_id}` で検証 → nullifier 未使用を確認 → 相棒専用ウォレット生成 → ガス代を供給 → 専用 Permissioned Resolver をデプロイし `<label>.otomo.eth` を UserRegistry に登録（譲渡不可・所有者は相棒自身）。
+1. **誕生**: `/` で名前を入力 → 「顔で誕生させる」。World IDKit（action=`otomo-birth`, signal=サーバー発行の一度きり誕生チャレンジ, Selfie Check/パスポート/マイナンバー/Orb のいずれかの証明）→ サーバーが `developer.world.org/api/v4/verify/{rp_id}` で検証 → nullifier 未使用を確認 → 相棒専用ウォレット生成 → ガス代を供給 → 専用 Permissioned Resolver をデプロイし `<label>.otomo.eth` を UserRegistry に登録（譲渡不可・所有者は相棒自身）。
 2. **契り**: 「World ID で契りを結ぶ」→ World ID for Agents（OIDC sandbox）で初回ログイン。`sub` を相棒に紐付け、以後の承認はこの `sub` 一致が前提。
 3. **チャット / 音声**: `/otomo/<label>` で相棒と話す。`🎤 音声で会話する` は Gemini Live（`gemini-3.8-live`）へブラウザから直接 WebSocket 接続（単回使用の ephemeral token を `/api/live/token` が発行、実 API キーはクライアントに出ない）。「気分を変えて」は ENS の `otomo.mood` に相棒ウォレットで即書き込み。
 4. **「お金を増やして」**: LLM が `grow_savings` intent を返す → ポリシーが残高を確認 → `pending_actions` に保存（5分TTL）→ 「顔で承認する」で `prompt=login` 再認証 → サーバーが運用計画（strategy）を `ready` で保存。
@@ -78,7 +78,7 @@ flowchart LR
 
 ### World — Best Use of IDKit / Best Use of World ID for Agents
 
-- **Selfie Check（credential 11）を選んだ理由**: Orb 不要で World ID App だけで使える medium assurance。「1人に1体」は nullifier（`used_nullifiers` テーブル）で担保し、顔画像・生体情報はアプリに一切届きません（検証は Developer Portal 側）。`WORLD_SYBIL_MAX` で sybil_score 超過の誕生を拒否できます。
+- **Selfie Check（credential 11）を主軸にした理由**: Orb 不要で World ID App だけで使える medium assurance。パスポート（9303）・マイナンバー（9310）・Proof of Human（1）も同じ nullifier 保証の下で受け付けます。「1人に1体」は nullifier（`used_nullifiers` テーブル）で担保し、顔画像・生体情報はアプリに一切届きません（検証は Developer Portal 側）。`WORLD_SYBIL_MAX` で sybil_score 超過の誕生を拒否できます。
 - **バックエンド検証**: RP 署名は [`app/src/app/api/world/rp-signature/route.ts`](app/src/app/api/world/rp-signature/route.ts)、proof 検証は [`app/src/app/api/birth/route.ts`](app/src/app/api/birth/route.ts) が `POST https://developer.world.org/api/v4/verify/{rp_id}` に委譲。順序: verify 成功 → signal 一致 → nullifier 未使用 → sybil 判定。
 - **World ID for Agents（OIDC sandbox）**: 重要操作は [`app/src/lib/approval.ts`](app/src/lib/approval.ts) + [`app/src/app/api/approval/callback/route.ts`](app/src/app/api/approval/callback/route.ts) で「その場の本人確認」。`prompt=login&max_age=0`、PKCE S256、JWKS で iss/aud/exp/nonce 検証、`auth_time >= action.created_at`、pairwise `sub` が契りの sub と一致した時だけ実行。
 - **失敗パス**: キャンセル・期限切れ（5分）・別人・古い auth_time・state リプレイはすべて rejected/expired で**実行されない**こと — [`app/tests/approval.test.ts`](app/tests/approval.test.ts)（8件）。

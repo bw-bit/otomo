@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { IDKitRequestWidget, CredentialRequest, any, type IDKitResult, type RpContext } from "@worldcoin/idkit";
+import { IDKitRequestWidget, CredentialRequest, any, setDebug, type IDKitResult, type RpContext } from "@worldcoin/idkit";
 import { BirthScene, type BirthPhase } from "@/components/BirthScene";
 import { BIRTH_ACTION } from "@/lib/birth";
+
+setDebug(true);
 
 const APP_ID = process.env.NEXT_PUBLIC_WORLD_APP_ID as `app_${string}` | undefined;
 const WORLD_ENV = (process.env.NEXT_PUBLIC_WORLD_ENV ?? "staging") as "production" | "staging" | "sandbox";
@@ -75,7 +77,7 @@ export default function BirthPage() {
         {!born ? (
           <>
             <h1>世界に一人の相棒を迎える</h1>
-            <p>顔の確認（World ID Selfie Check）で相棒が生まれます。同じ認証識別子で作れる相棒は1体です。顔画像は受け取らず、検証結果と重複防止用の識別子を保存します。</p>
+            <p>World ID の本人確認（顔・パスポート・マイナンバー・Orb のいずれか）で相棒が生まれます。同じ認証識別子で作れる相棒は1体です。画像や文書の中身は受け取らず、検証結果と重複防止用の識別子だけを保存します。</p>
             <p>ウォレット接続は不要です。相棒はSepolia上の専用テストウォレットを持ちます。</p>
             <div className="row"><button className="ghost" disabled={phase === "verifying" || phase === "forming"} onClick={() => setMode(mode === "birth" ? "login" : "birth")}>{mode === "birth" ? "すでに相棒がいる方はこちら" : "新しい相棒を迎える"}</button></div>
             {mode === "birth" && <>
@@ -121,10 +123,18 @@ export default function BirthPage() {
           rp_context={rp}
           allow_legacy_proofs={false}
           environment={WORLD_ENV}
-          constraints={any(CredentialRequest("selfie", { signal }))}
+          constraints={any(
+            CredentialRequest("selfie", { signal }),
+            CredentialRequest("passport", { signal }),
+            CredentialRequest("mnc", { signal }),
+            CredentialRequest("proof_of_human", { signal }),
+          )}
           handleVerify={handleVerify}
           onSuccess={() => setOpen(false)}
-          onError={(code) => fail(`顔の確認が完了しませんでした（${code}）`)}
+          onError={(code, report) => {
+            console.error("[idkit] error", code, report);
+            fail(`顔の確認が完了しませんでした（code: ${code}）${report ? ` — ${JSON.stringify(report).slice(0, 400)}` : ""}`);
+          }}
         />
       )}
     </main>

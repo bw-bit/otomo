@@ -36,7 +36,7 @@ const ok = vi.fn(async () => ({ ok: true, detail: "" }));
 
 describe("birth proof", () => {
   it("accepts a verified selfie proof bound to the wallet", async () => {
-    expect(await checkBirthProof(payload(), WALLET, { db, verifyWithPortal: ok })).toEqual({ ok: true, nullifier: "0xnull", sybilScore: 1 });
+    expect(await checkBirthProof(payload(), WALLET, { db, verifyWithPortal: ok })).toEqual({ ok: true, nullifier: "0xnull", sybilScore: 1, credential: "selfie" });
   });
   it("rejects when the portal rejects, before trusting any field", async () => {
     const r = await checkBirthProof(payload(), WALLET, { db, verifyWithPortal: async () => ({ ok: false, detail: "invalid_proof" }) });
@@ -61,9 +61,15 @@ describe("birth proof", () => {
     const r = await checkBirthProof(payload({ sybil_score: 9 }), WALLET, { db, verifyWithPortal: ok, sybilMax: 3 });
     expect(r).toMatchObject({ ok: false, code: "sybil_risk" });
   });
-  it("rejects non-selfie credentials", async () => {
-    const r = await checkBirthProof(payload({ identifier: "passport", issuer_schema_id: 9303 }), WALLET, { db, verifyWithPortal: ok });
-    expect(r).toMatchObject({ ok: false, code: "not_selfie" });
+  it("accepts passport, mnc and proof_of_human credentials", async () => {
+    for (const [identifier, issuer_schema_id] of [["passport", 9303], ["mnc", 9310], ["proof_of_human", 1]] as const) {
+      const r = await checkBirthProof(payload({ identifier, issuer_schema_id }), WALLET, { db, verifyWithPortal: ok });
+      expect(r).toMatchObject({ ok: true, credential: identifier });
+    }
+  });
+  it("rejects unsupported credentials", async () => {
+    const r = await checkBirthProof(payload({ identifier: "document", issuer_schema_id: 9999 }), WALLET, { db, verifyWithPortal: ok });
+    expect(r).toMatchObject({ ok: false, code: "unsupported_credential" });
   });
 });
 

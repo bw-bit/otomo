@@ -19,8 +19,16 @@ export interface BirthPayload {
 }
 
 export type BirthCheck =
-  | { ok: true; nullifier: string; sybilScore: number | null }
-  | { ok: false; code: "verify_failed" | "wrong_action" | "not_selfie" | "signal_mismatch" | "duplicate" | "sybil_risk"; reason: string };
+  | { ok: true; nullifier: string; sybilScore: number | null; credential: string }
+  | { ok: false; code: "verify_failed" | "wrong_action" | "unsupported_credential" | "signal_mismatch" | "duplicate" | "sybil_risk"; reason: string };
+
+/** Accepted World ID credentials (v4): face, NFC documents, or Orb proof of human. */
+export const ACCEPTED_CREDENTIALS: ReadonlyMap<string, number> = new Map([
+  ["selfie", 11],
+  ["passport", 9303],
+  ["mnc", 9310],
+  ["proof_of_human", 1],
+]);
 
 export interface BirthDeps {
   db: Db;
@@ -37,8 +45,8 @@ export async function checkBirthProof(payload: BirthPayload, signal: string, dep
   if (payload.action !== undefined && payload.action !== BIRTH_ACTION)
     return { ok: false, code: "wrong_action", reason: "誕生用の認証ではありません" };
 
-  const item = payload.responses?.find((r) => r.issuer_schema_id === 11 || r.identifier === "selfie");
-  if (!item) return { ok: false, code: "not_selfie", reason: "Selfie Check の証明が含まれていません" };
+  const item = payload.responses?.find((r) => ACCEPTED_CREDENTIALS.has(r.identifier));
+  if (!item) return { ok: false, code: "unsupported_credential", reason: "対応する World ID 証明（顔・パスポート・マイナンバー・Orb）が含まれていません" };
 
   const expected = hashSignal(signal.toLowerCase()).toLowerCase();
   if (!item.signal_hash || item.signal_hash.toLowerCase() !== expected)
@@ -51,7 +59,7 @@ export async function checkBirthProof(payload: BirthPayload, signal: string, dep
   if (deps.sybilMax !== undefined && score !== null && score > deps.sybilMax)
     return { ok: false, code: "sybil_risk", reason: `重複登録のリスクが高いと判定されました（sybil_score=${score}）` };
 
-  return { ok: true, nullifier: item.nullifier, sybilScore: score };
+  return { ok: true, nullifier: item.nullifier, sybilScore: score, credential: item.identifier };
 }
 
 export async function markNullifierUsed(db: Db, nullifier: string, now: number) {
