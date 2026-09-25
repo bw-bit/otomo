@@ -38,6 +38,14 @@ describe("birth proof", () => {
   it("accepts a verified selfie proof bound to the wallet", async () => {
     expect(await checkBirthProof(payload(), WALLET, { db, verifyWithPortal: ok })).toEqual({ ok: true, nullifier: "0xnull", sybilScore: 1, credential: "selfie" });
   });
+  it("accepts the hashed v4 action form", async () => {
+    const p = { ...payload(), action: "0x00b3ad4f6105123548927b72800e30fd398fe0c73063a4ee2b369852b4dc7cf2" };
+    expect(await checkBirthProof(p, WALLET, { db, verifyWithPortal: ok })).toMatchObject({ ok: true });
+  });
+  it("rejects a different action", async () => {
+    const r = await checkBirthProof({ ...payload(), action: "other-action" }, WALLET, { db, verifyWithPortal: ok });
+    expect(r).toMatchObject({ ok: false, code: "wrong_action" });
+  });
   it("rejects when the portal rejects, before trusting any field", async () => {
     const r = await checkBirthProof(payload(), WALLET, { db, verifyWithPortal: async () => ({ ok: false, detail: "invalid_proof" }) });
     expect(r).toMatchObject({ ok: false, code: "verify_failed" });
@@ -68,7 +76,7 @@ describe("birth proof", () => {
     }
   });
   it("rejects unsupported credentials", async () => {
-    const r = await checkBirthProof(payload({ identifier: "document", issuer_schema_id: 9999 }), WALLET, { db, verifyWithPortal: ok });
+    const r = await checkBirthProof(payload({ identifier: "device", issuer_schema_id: 9999 }), WALLET, { db, verifyWithPortal: ok });
     expect(r).toMatchObject({ ok: false, code: "unsupported_credential" });
   });
 });

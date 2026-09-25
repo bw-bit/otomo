@@ -2,6 +2,8 @@ import { hashSignal } from "@worldcoin/idkit/hashing";
 import type { Db } from "./db";
 
 export const BIRTH_ACTION = "otomo-birth";
+/** Deterministic hashed form of BIRTH_ACTION as it appears inside v4 payloads. */
+const BIRTH_ACTION_HASH = "0x00b3ad4f6105123548927b72800e30fd398fe0c73063a4ee2b369852b4dc7cf2";
 
 export interface SelfieResponseItem {
   identifier: string;
@@ -22,12 +24,15 @@ export type BirthCheck =
   | { ok: true; nullifier: string; sybilScore: number | null; credential: string }
   | { ok: false; code: "verify_failed" | "wrong_action" | "unsupported_credential" | "signal_mismatch" | "duplicate" | "sybil_risk"; reason: string };
 
-/** Accepted World ID credentials (v4): face, NFC documents, or Orb proof of human. */
-export const ACCEPTED_CREDENTIALS: ReadonlyMap<string, number> = new Map([
-  ["selfie", 11],
-  ["passport", 9303],
-  ["mnc", 9310],
-  ["proof_of_human", 1],
+/** Accepted World ID credential identifiers: v4 (selfie/passport/mnc/proof_of_human) plus legacy v3 aliases. */
+export const ACCEPTED_CREDENTIALS: ReadonlySet<string> = new Set([
+  "selfie",
+  "passport",
+  "mnc",
+  "proof_of_human",
+  "orb",
+  "document",
+  "secure_document",
 ]);
 
 export interface BirthDeps {
@@ -42,7 +47,7 @@ export interface BirthDeps {
 export async function checkBirthProof(payload: BirthPayload, signal: string, deps: BirthDeps): Promise<BirthCheck> {
   const verified = await deps.verifyWithPortal(payload);
   if (!verified.ok) return { ok: false, code: "verify_failed", reason: `World ID の検証に失敗しました: ${verified.detail}` };
-  if (payload.action !== undefined && payload.action !== BIRTH_ACTION)
+  if (typeof payload.action === "string" && payload.action !== BIRTH_ACTION && payload.action.toLowerCase() !== BIRTH_ACTION_HASH)
     return { ok: false, code: "wrong_action", reason: "誕生用の認証ではありません" };
 
   const item = payload.responses?.find((r) => ACCEPTED_CREDENTIALS.has(r.identifier));

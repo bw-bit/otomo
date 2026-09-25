@@ -121,7 +121,7 @@ export default function BirthPage() {
           app_id={APP_ID}
           action={BIRTH_ACTION}
           rp_context={rp}
-          allow_legacy_proofs={false}
+          allow_legacy_proofs={true}
           environment={WORLD_ENV}
           constraints={any(
             CredentialRequest("selfie", { signal }),
