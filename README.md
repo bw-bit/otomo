@@ -74,7 +74,7 @@ flowchart LR
 
 ### ENS — Best Use of ENSv2
 
-- ENSv2 が中核: 相棒 = 名前空間。親名 `otomo.eth`（ETHRegistrar commit-reveal で取得）配下に、相棒ごとに VerifiableFactory で UserRegistry + 専用 Permissioned Resolver をデプロイし `register` します（[`app/scripts/setup-parent.ts`](app/scripts/setup-parent.ts)、[`app/src/lib/chain.ts`](app/src/lib/chain.ts) `issueCompanionName`）。
+- ENSv2 が中核: 相棒 = 名前空間。親名 `otomo.eth`（ETHRegistrar commit-reveal で取得）配下に UserRegistry を1つ持ち、相棒ごとに VerifiableFactory で専用 Permissioned Resolver をデプロイして `register` します（[`app/scripts/setup-parent.ts`](app/scripts/setup-parent.ts)、[`app/src/lib/chain.ts`](app/src/lib/chain.ts) `issueCompanionName`）。
 - **譲渡不可**: `COMPANION_ROLE_BITMAP = ROLE_SET_RESOLVER | ROLE_SET_RESOLVER_ADMIN`（[`app/src/lib/ens.ts`](app/src/lib/ens.ts)）。`ROLE_CAN_TRANSFER_ADMIN` を付けないため、相棒の名前は売却・譲渡できません。
 - **最小権限**: resolver の `grants` は持ち主に `ALL_ROLES`（`0x1111…` 64ニブル）のみ。agent 鍵には `grantSetterRoles(encodeFunctionData(setText, [name, "otomo.mood", ""]))` で `otomo.mood` キーの `setText` だけを許可（SPEC-1 §2.4a の仮説は init calls 内で検証可能にしてあり、`ENS_GRANT_AGENT_IN_INIT` で切替）。
 - Sepolia (ENSv2 Beta) の確定アドレスは [`docs/research.md`](docs/research.md) を正とします。
@@ -150,7 +150,7 @@ cd ../app && npm run dev      # http://localhost:3000
 
 ## 未検証・制限（正直に）
 
-- **Aqua スタックは実 Sepolia では未デプロイ**（operator の Sepolia ETH 待ち）。アプリ側の ship→confirm→demo swap→dock 経路はローカル anvil でのみ実証済みです。
+- **Aqua スタックは実 Sepolia では未デプロイ**（operator の Sepolia ETH 待ち）。コントラクト単体の ship→quote→swap→dock はローカル anvil と forge test で実証済みですが、アプリ側の ship→confirm→demo swap→dock 経路は実チェーンで未検証です。
 - Selfie Check は厳密な「1人1アカウント」を保証しません（medium assurance）。1体制限は nullifier で担保し、追加のリスク判定に sybil_score を使います。
 - 価格はモック想定（2000 USDC/WETH の固定レートで WETH レグを半分に）。モックトークンなので実市場連動ではありません。
 - LLM は OpenAI 互換 `/chat/completions` なら任意のプロバイダに差し替え可能。LLM の出力は intent JSON として zod 検証され、ポリシー判定は常に決定的なコード側です。
