@@ -1,0 +1,9 @@
+.git/
+.vercel/
+**/node_modules/
+**/.next/
+**/.env*
+**/*.db
+**/*.db-*
+contracts/out/
+contracts/cache/
