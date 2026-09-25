@@ -50,6 +50,21 @@ Keys default to anvil's well-known dev accounts; override with
 Installed into `lib/` by `script/install-deps.sh` (not committed; plain directories, no submodules).
 `src/OtomoProgram.sol` uses swap-vm's `test/utils/ProgramBuilder.sol` to encode opcodes.
 
+## Sepolia deployment
+
+Aqua is not officially deployed on Sepolia, so `script/DeploySepolia.s.sol`
+deploys the whole stack (Aqua, AquaSwapVMRouter, mWETH mock, OtomoProgram,
+OtomoOrderBuilder). mUSDC is the existing ENS MockUSDC
+(`0x16f95d91dba7da3aca778ec053df0ff6c6a8aa8e`, permissionless `mint`, 6dp).
+
+```sh
+DEPLOYER_PRIVATE_KEY=0x... forge script script/DeploySepolia.s.sol \
+  --rpc-url "$SEPOLIA_RPC_URL" --broadcast
+```
+
+Writes `deployments/sepolia.json` (aqua / router / usdc / weth / encoder /
+orderBuilder) — feed those into the app's `AQUA_*` / `MOCK_WETH_ADDRESS` env.
+
 ## License
 
 Files that incorporate SwapVM / Aqua code are released under their licenses
@@ -59,6 +74,9 @@ Files that incorporate SwapVM / Aqua code are released under their licenses
 ## Files
 
 - `src/OtomoProgram.sol` — encodes the SwapVM program via the Aqua opcode set.
+- `src/OtomoOrderBuilder.sol` — on-chain order/taker-data encoder so the app
+  never reimplements MakerTraits/TakerTraits packing in TypeScript.
+- `script/DeploySepolia.s.sol` — deploys the stack to Sepolia → `deployments/sepolia.json`.
 - `src/mocks/MockERC20.sol` — test ERC-20 (mUSDC 6dp, mWETH 18dp).
 - `script/Demo.s.sol` — deploy → mint → ship → quote → swap → dock, with
   wallet + Aqua virtual balances logged at each step.
