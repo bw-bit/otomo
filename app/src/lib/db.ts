@@ -75,6 +75,9 @@ CREATE TABLE IF NOT EXISTS strategies (
   router TEXT NOT NULL, strategy TEXT NOT NULL, strategy_hash TEXT,
   usdc_amount REAL NOT NULL, weth_amount REAL NOT NULL, deadline INTEGER NOT NULL,
   status TEXT NOT NULL, ship_tx TEXT, dock_tx TEXT, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS translations (
+  hash TEXT PRIMARY KEY, lang TEXT NOT NULL, text TEXT NOT NULL, translated TEXT NOT NULL,
+  created_at INTEGER NOT NULL);
 `;
 
 export async function openDb(url = process.env.TURSO_DATABASE_URL || `file:${process.env.OTOMO_DB ?? path.join(process.cwd(), "otomo.db")}`): Promise<Client> {
