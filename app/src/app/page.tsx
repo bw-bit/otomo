@@ -22,7 +22,7 @@ interface Born {
 
 export default function BirthPage() {
   const { address, isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
+  const { connectAsync, connectors, isPending: isConnecting } = useConnect();
   const { writeContractAsync } = useWriteContract();
   const [label, setLabel] = useState("");
   const [hint, setHint] = useState("");
@@ -30,6 +30,7 @@ export default function BirthPage() {
   const [rp, setRp] = useState<RpContext | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [walletError, setWalletError] = useState<string | null>(null);
   const [born, setBorn] = useState<Born | null>(null);
   const [agentAddr, setAgentAddr] = useState<`0x${string}` | null>(null);
   const [grantTx, setGrantTx] = useState<string | null>(null);
@@ -38,6 +39,29 @@ export default function BirthPage() {
     setError(msg);
     setPhase("failed");
     setTimeout(() => setPhase((p) => (p === "failed" ? "idle" : p)), 2600);
+  };
+
+  const connectWallet = async () => {
+    setWalletError(null);
+    const connector = connectors[0];
+    if (!connector) {
+      setWalletError("EVMウォレットが見つかりません。MetaMaskなどの拡張機能を有効にしてください。");
+      return;
+    }
+    try {
+      await connectAsync({ connector });
+    } catch (cause) {
+      const detail = cause instanceof Error ? `${cause.name} ${cause.message}` : String(cause);
+      if (/already pending|already processing|request of type .*pending|-32002/i.test(detail)) {
+        setWalletError("ウォレットの接続要求が保留中です。MetaMaskの拡張機能を開き、承認または拒否してください。");
+      } else if (/provider not found|no provider|injected.*not found/i.test(detail)) {
+        setWalletError("EVMウォレットが見つかりません。MetaMaskなどの拡張機能を有効にしてください。");
+      } else if (/user rejected|user denied|4001/i.test(detail)) {
+        setWalletError("ウォレットで接続がキャンセルされました。");
+      } else {
+        setWalletError("接続できませんでした。ウォレット拡張機能の画面とロック状態を確認してください。");
+      }
+    }
   };
 
   const start = async () => {
@@ -93,9 +117,13 @@ export default function BirthPage() {
             <h1>世界に一人の相棒を迎える</h1>
             <p>顔の確認（World ID Selfie Check）で、1人に1体だけ相棒が生まれます。顔の画像や個人情報はこのアプリに届きません。</p>
             {!isConnected ? (
-              <div className="row">
-                <button onClick={() => connect({ connector: connectors[0] })} disabled={!connectors[0]}>ウォレットを接続</button>
-              </div>
+              <>
+                <div className="row">
+                  <button onClick={connectWallet} disabled={isConnecting}>{isConnecting ? "ウォレットの確認待ち…" : "ウォレットを接続"}</button>
+                </div>
+                <p>MetaMaskなどのEVMウォレットを開き、接続を承認してください。</p>
+                {walletError && <p className="ng" role="alert">{walletError}</p>}
+              </>
             ) : (
               <>
                 <p className="mono">{address}</p>
