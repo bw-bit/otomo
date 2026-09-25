@@ -27,6 +27,7 @@ export default function BirthPage() {
   const [error, setError] = useState<string | null>(null);
   const [signal, setSignal] = useState("");
   const [mode, setMode] = useState<"birth" | "login">("birth");
+  const [reservedLabel, setReservedLabel] = useState<string | null>(null);
   const [born, setBorn] = useState<Born | null>(null);
   const fail = (msg: string) => {
     setError(msg);
@@ -37,13 +38,15 @@ export default function BirthPage() {
   const start = async () => {
     setError(null);
     if (!APP_ID) return fail("NEXT_PUBLIC_WORLD_APP_ID が設定されていません");
-    const res = await fetch("/api/world/rp-signature", { method: "POST" });
-    const sig = await res.json();
-    if (!res.ok) return fail(sig.error ?? "RP 署名の取得に失敗しました");
-    setSignal(sig.signal);
-    setRp({ rp_id: sig.rp_id, nonce: sig.nonce, created_at: sig.created_at, expires_at: sig.expires_at, signature: sig.sig });
     setPhase("verifying");
-    setOpen(true);
+    try {
+      const res = await fetch("/api/world/rp-signature", { method: "POST" });
+      const sig = await res.json();
+      if (!res.ok) return fail(sig.error ?? "RP 署名の取得に失敗しました");
+      setSignal(sig.signal);
+      setRp({ rp_id: sig.rp_id, nonce: sig.nonce, created_at: sig.created_at, expires_at: sig.expires_at, signature: sig.sig });
+      setOpen(true);
+    } catch { fail("認証の準備に接続できませんでした。もう一度お試しください"); }
   };
 
   const handleVerify = async (result: IDKitResult) => {
@@ -55,6 +58,7 @@ export default function BirthPage() {
     });
     const body = await res.json();
     if (!res.ok) {
+      if (res.status === 503 && typeof body.label === "string") setReservedLabel(body.label);
       fail(body.error ?? "誕生に失敗しました");
       throw new Error(body.error);
     }
@@ -71,9 +75,9 @@ export default function BirthPage() {
         {!born ? (
           <>
             <h1>世界に一人の相棒を迎える</h1>
-            <p>顔の確認（World ID Selfie Check）で、1人に1体だけ相棒が生まれます。顔の画像や個人情報はこのアプリに届きません。</p>
+            <p>顔の確認（World ID Selfie Check）で相棒が生まれます。同じ認証識別子で作れる相棒は1体です。顔画像は受け取らず、検証結果と重複防止用の識別子を保存します。</p>
             <p>ウォレット接続は不要です。相棒はSepolia上の専用テストウォレットを持ちます。</p>
-            <div className="row"><button className="ghost" onClick={() => setMode(mode === "birth" ? "login" : "birth")}>{mode === "birth" ? "すでに相棒がいる方はこちら" : "新しい相棒を迎える"}</button></div>
+            <div className="row"><button className="ghost" disabled={phase === "verifying" || phase === "forming"} onClick={() => setMode(mode === "birth" ? "login" : "birth")}>{mode === "birth" ? "すでに相棒がいる方はこちら" : "新しい相棒を迎える"}</button></div>
             {mode === "birth" && <>
                 <div className="row">
                   <input placeholder="相棒の名前（英小文字・数字・-）" value={label} onChange={(e) => setLabel(e.target.value.toLowerCase())} maxLength={20} />
@@ -88,6 +92,7 @@ export default function BirthPage() {
                   </button>
                 </div>
             {error && <p className="ng">{error}</p>}
+            {reservedLabel && <Link href={`/otomo/${reservedLabel}`}>保存された相棒の状態を確認する</Link>}
           </>
         ) : (
           <>
@@ -110,7 +115,7 @@ export default function BirthPage() {
       {rp && APP_ID && signal && (
         <IDKitRequestWidget
           open={open}
-          onOpenChange={setOpen}
+          onOpenChange={(value) => { setOpen(value); if (!value) setPhase(p => p === "verifying" ? "idle" : p); }}
           app_id={APP_ID}
           action={BIRTH_ACTION}
           rp_context={rp}
