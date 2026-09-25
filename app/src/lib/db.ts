@@ -75,6 +75,23 @@ CREATE TABLE IF NOT EXISTS strategies (
   router TEXT NOT NULL, strategy TEXT NOT NULL, strategy_hash TEXT,
   usdc_amount REAL NOT NULL, weth_amount REAL NOT NULL, deadline INTEGER NOT NULL,
   status TEXT NOT NULL, ship_tx TEXT, dock_tx TEXT, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS birth_provisioning (
+  label TEXT PRIMARY KEY, status TEXT NOT NULL, register_tx TEXT, error TEXT);
+CREATE TABLE IF NOT EXISTS identity_bindings (
+  label TEXT PRIMARY KEY, issuer TEXT NOT NULL, verified_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS companion_identity (
+  label TEXT PRIMARY KEY REFERENCES companions(label), wallet_cipher TEXT NOT NULL,
+  sybil_score REAL, verification_environment TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS birth_challenges (
+  id TEXT PRIMARY KEY, signal TEXT NOT NULL, expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS work_attempts (
+  request_id TEXT PRIMARY KEY, token TEXT NOT NULL, expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS work_deliveries (
+  request_id TEXT PRIMARY KEY REFERENCES friend_requests(id), content TEXT NOT NULL,
+  delivered_at INTEGER NOT NULL, reviewed_at INTEGER, reward_action_id TEXT UNIQUE);
+CREATE TABLE IF NOT EXISTS reputation_publications (
+  label TEXT PRIMARY KEY, snapshot TEXT NOT NULL, tx_hash TEXT, status TEXT NOT NULL,
+  published_at INTEGER, error TEXT);
 CREATE TABLE IF NOT EXISTS translations (
   hash TEXT PRIMARY KEY, lang TEXT NOT NULL, text TEXT NOT NULL, translated TEXT NOT NULL,
   created_at INTEGER NOT NULL);

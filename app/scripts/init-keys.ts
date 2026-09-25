@@ -17,6 +17,7 @@ const setIfEmpty = (key: string, value: string) => {
 
 setIfEmpty("OPERATOR_PRIVATE_KEY", generatePrivateKey());
 setIfEmpty("AGENT_PRIVATE_KEY", generatePrivateKey());
+setIfEmpty("COMPANION_WALLET_KEY", randomBytes(32).toString("hex"));
 setIfEmpty("APP_SECRET", randomBytes(32).toString("base64url"));
 writeFileSync(target, text, { mode: 0o600 });
 

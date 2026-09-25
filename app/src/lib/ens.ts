@@ -77,6 +77,7 @@ export const erc20Abi = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
   "function balanceOf(address owner) view returns (uint256)",
   "function transferFrom(address from, address to, uint256 amount) returns (bool)",
+  "function transfer(address to, uint256 amount) returns (bool)",
 ]);
 
 export const labelhash = (label: string) => BigInt(keccak256(stringToHex(label)));

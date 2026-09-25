@@ -27,10 +27,11 @@ export interface BirthDeps {
   /** Calls POST {devPortal}/api/v4/verify/{rp_id}. Returns ok=false with the portal's message on failure. */
   verifyWithPortal: (payload: BirthPayload) => Promise<{ ok: boolean; detail: string }>;
   sybilMax?: number;
+  allowExisting?: boolean;
 }
 
 /** Order matters: portal verification first, then only trust fields of the verified payload. */
-export async function checkBirthProof(payload: BirthPayload, walletAddress: string, deps: BirthDeps): Promise<BirthCheck> {
+export async function checkBirthProof(payload: BirthPayload, signal: string, deps: BirthDeps): Promise<BirthCheck> {
   const verified = await deps.verifyWithPortal(payload);
   if (!verified.ok) return { ok: false, code: "verify_failed", reason: `World ID の検証に失敗しました: ${verified.detail}` };
   if (payload.action !== undefined && payload.action !== BIRTH_ACTION)
@@ -39,12 +40,12 @@ export async function checkBirthProof(payload: BirthPayload, walletAddress: stri
   const item = payload.responses?.find((r) => r.issuer_schema_id === 11 || r.identifier === "selfie");
   if (!item) return { ok: false, code: "not_selfie", reason: "Selfie Check の証明が含まれていません" };
 
-  const expected = hashSignal(walletAddress.toLowerCase()).toLowerCase();
+  const expected = hashSignal(signal.toLowerCase()).toLowerCase();
   if (!item.signal_hash || item.signal_hash.toLowerCase() !== expected)
-    return { ok: false, code: "signal_mismatch", reason: "証明が接続中のウォレットに紐付いていません" };
+    return { ok: false, code: "signal_mismatch", reason: "証明がこの誕生セッションに紐付いていません" };
 
   const used = (await deps.db.execute({ sql: `SELECT 1 FROM used_nullifiers WHERE nullifier = ?`, args: [item.nullifier] })).rows[0];
-  if (used) return { ok: false, code: "duplicate", reason: "この World ID ではすでに相棒が生まれています（1人1体）" };
+  if (used && !deps.allowExisting) return { ok: false, code: "duplicate", reason: "この World ID ではすでに相棒が生まれています（1人1体）" };
 
   const score = typeof item.sybil_score === "number" ? item.sybil_score : null;
   if (deps.sybilMax !== undefined && score !== null && score > deps.sybilMax)

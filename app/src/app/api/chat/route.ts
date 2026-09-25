@@ -7,6 +7,9 @@ import { decide } from "@/lib/policy";
 import { createPendingAction } from "@/lib/approval";
 import { companionSystemPrompt, openAiCompatibleChat, personalitySchema, type ChatMessage } from "@/lib/llm";
 import { agentAllowanceUsdc, agentSetMood, isCompanion, resolveName, usdcBalanceOf } from "@/lib/chain";
+import { hasCompanionWallet } from "@/lib/companion-wallet";
+import { companionSetText } from "@/lib/chain";
+import { MAX_SINGLE_PAYMENT_USDC } from "@/lib/policy";
 import { SESSION_COOKIE, readSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -35,10 +38,11 @@ export async function POST(req: NextRequest): Promise<Response> {
       { sql: insertSql, args: [label, "assistant", text, Date.now()] },
     ], "write");
 
+    const managed = await hasCompanionWallet(db, c.label);
     const decision = await decide(intent, {
       owner: c.owner as Address,
       ownerUsdcBalance: usdcBalanceOf,
-      agentAllowanceUsdc: await agentAllowanceUsdc(c.owner as Address),
+      agentAllowanceUsdc: managed ? Math.min(MAX_SINGLE_PAYMENT_USDC, await usdcBalanceOf(c.owner as Address)) : await agentAllowanceUsdc(c.owner as Address),
       resolveName,
       isCompanion,
     });
@@ -50,7 +54,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       case "reject":
         return NextResponse.json({ text, decision });
       case "auto": {
-        const txHash = await agentSetMood(c.resolver as Address, c.full_name, decision.intent.mood);
+        const txHash = managed ? await companionSetText(c, "otomo.mood", decision.intent.mood) : await agentSetMood(c.resolver as Address, c.full_name, decision.intent.mood);
         return NextResponse.json({ text, decision, txHash });
       }
       case "needs_approval": {

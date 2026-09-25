@@ -105,3 +105,16 @@ describe("approval callback", () => {
     expect((await db.execute(`SELECT agent_sub FROM companions`)).rows[0].agent_sub).toBe("sub-a");
   });
 });
+
+it('retains a broadcast hash when receipt polling fails and never executes it twice', async()=>{
+ const {action,flow,deps}=await setup();
+ deps.execute=vi.fn(async()=>{
+  await db.execute({sql:'UPDATE pending_actions SET tx_hash=? WHERE id=?',args:['0xsubmitted',action.id]});
+  throw Error('receipt timeout');
+ });
+ expect((await handleAuthCallback({state:flow.state,code:'c',error:null,now:T0+1000},deps)).ok).toBe(false);
+ expect((await db.execute({sql:'SELECT status,reason,tx_hash FROM pending_actions WHERE id=?',args:[action.id]})).rows[0]).toMatchObject({status:'executed',reason:'confirmation_pending',tx_hash:'0xsubmitted'});
+ const retry=await startAuthFlow(db,{kind:'approve',ref:action.id,now:T0+2000});
+ expect((await handleAuthCallback({state:retry.state,code:'c',error:null,now:T0+3000},deps)).ok).toBe(false);
+ expect(deps.execute).toHaveBeenCalledTimes(1);
+});
