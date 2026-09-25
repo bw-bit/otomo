@@ -87,6 +87,17 @@ export default function CompanionPage() {
     }
   };
 
+  const mintTestUsdc = async () => {
+    if (!address) return;
+    try {
+      await writeContractAsync({ address: ENS_SEPOLIA.mockUsdc, abi: erc20Abi, functionName: "mint", args: [address, parseUnits("1000", 6)] });
+      setNote("テスト用 mUSDC 1000 を受け取りました（反映まで数秒）");
+      setTimeout(load, 6000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const updateReq = async (id: string, status: "accepted" | "done") => {
     const r = await fetch("/api/friend-requests", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, status }) });
     if (!r.ok) setError((await r.json()).error);
@@ -273,6 +284,7 @@ export default function CompanionPage() {
           <div className="row">
             <input value={cap} onChange={(e) => setCap(e.target.value.replace(/[^0-9.]/g, ""))} />
             <button className="ghost" onClick={approveCap}>上限を設定</button>
+            <button className="ghost" onClick={mintTestUsdc} disabled={!address}>テスト用 mUSDC を受け取る（Sepolia）</button>
           </div>
         </div>
       </section>
