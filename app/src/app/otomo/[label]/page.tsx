@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { parseUnits } from "viem";
-import { useWriteContract } from "wagmi";
+import { maxUint256, parseUnits } from "viem";
+import { useAccount, useConnect, usePublicClient, useWriteContract } from "wagmi";
 import { CompanionAvatar } from "@/components/CompanionAvatar";
 import { ENS_SEPOLIA, erc20Abi } from "@/lib/ens";
+import { aquaAbi } from "@/lib/aquaAbi";
 
 interface Action { id: string; intent: string; amount_usdc: number; status: string; reason: string | null; tx_hash: string | null; expires_at: number }
 interface FriendReq { id: string; from_label: string; to_label: string; task: string; reward_usdc: number; status: string }
@@ -15,7 +16,23 @@ interface State {
   actions: Action[]; inbox: FriendReq[]; outbox: FriendReq[]; messages: { role: string; content: string }[];
 }
 
-const INTENT_LABEL: Record<string, string> = { send_usdc: "送金", request_friend: "友達への依頼", private_task: "個人的な頼みごと" };
+interface ShipParams {
+  aqua: `0x${string}`; router: `0x${string}`; tokens: `0x${string}`[]; amounts: string[]; strategy: `0x${string}`;
+  approvals: { token: `0x${string}`; spender: `0x${string}`; amount: string }[];
+}
+interface StrategyRow {
+  id: string; maker: string; router: string; strategy_hash: string | null;
+  usdc_amount: number; weth_amount: number; deadline: number;
+  status: "ready" | "shipped" | "docked"; ship_tx: string | null; dock_tx: string | null;
+  ship?: ShipParams; virtual?: { usdc: number; weth: number }; wallet?: { usdc: number; weth: number };
+  paramsError?: string;
+}
+interface StratState {
+  env: { aqua: `0x${string}`; router: `0x${string}`; usdc: `0x${string}`; weth: `0x${string}` } | null;
+  strategies: StrategyRow[];
+}
+
+const INTENT_LABEL: Record<string, string> = { send_usdc: "送金", request_friend: "友達への依頼", private_task: "個人的な頼みごと", grow_savings: "貯金の運用" };
 
 export default function CompanionPage() {
   const params = useSearchParams();
@@ -25,13 +42,19 @@ export default function CompanionPage() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [cap, setCap] = useState("20");
+  const [strat, setStrat] = useState<StratState | null>(null);
   const { writeContractAsync } = useWriteContract();
+  const { address, isConnected } = useAccount();
+  const { connectAsync, connectors, isPending: isConnecting } = useConnect();
+  const publicClient = usePublicClient();
 
   const load = useCallback(async () => {
     const r = await fetch("/api/companion");
     const b = await r.json();
     if (!r.ok) setError(b.error);
     else setS(b);
+    const sr = await fetch("/api/strategies");
+    if (sr.ok) setStrat(await sr.json());
   }, []);
   useEffect(() => void load(), [load]);
 
@@ -68,6 +91,75 @@ export default function CompanionPage() {
     const r = await fetch("/api/friend-requests", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, status }) });
     if (!r.ok) setError((await r.json()).error);
     load();
+  };
+
+  const postStrategy = async (id: string, body: object) => {
+    const r = await fetch(`/api/strategies/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const b = await r.json();
+    if (!r.ok) throw new Error(b.error);
+    return b;
+  };
+
+  // Maker ships the strategy herself: approve Aqua for both tokens (only if the
+  // current allowance is short), then aqua.ship. The funds stay in her wallet.
+  const ship = async (st: StrategyRow) => {
+    if (!st.ship || !publicClient || !address) return;
+    setBusy(true);
+    setError(null);
+    try {
+      for (const ap of st.ship.approvals) {
+        const current = await publicClient.readContract({
+          address: ap.token, abi: erc20Abi, functionName: "allowance", args: [address, ap.spender],
+        });
+        if (current < BigInt(ap.amount)) {
+          await writeContractAsync({ address: ap.token, abi: erc20Abi, functionName: "approve", args: [ap.spender, maxUint256] });
+        }
+      }
+      const hash = await writeContractAsync({
+        address: st.ship.aqua, abi: aquaAbi, functionName: "ship",
+        args: [st.ship.router, st.ship.strategy, st.ship.tokens, st.ship.amounts.map(BigInt)],
+      });
+      await postStrategy(st.id, { event: "shipped", txHash: hash });
+      setNote("運用を開始しました（資金はウォレットに残ったままです）");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const demoSwap = async (st: StrategyRow) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const b = await postStrategy(st.id, { event: "demo_swap" });
+      setNote(`相棒が第三者としてスワップしました（tx: ${b.txHash}）`);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const dock = async (st: StrategyRow) => {
+    if (!strat?.env || !st.strategy_hash) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const hash = await writeContractAsync({
+        address: strat.env.aqua, abi: aquaAbi, functionName: "dock",
+        args: [st.router as `0x${string}`, st.strategy_hash as `0x${string}`, [strat.env.usdc, strat.env.weth]],
+      });
+      await postStrategy(st.id, { event: "docked", txHash: hash });
+      setNote("運用を終了しました");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (error && !s) return <main className="stage"><section className="panel"><p className="ng">{error}</p></section></main>;
@@ -111,6 +203,54 @@ export default function CompanionPage() {
             </div>
           );
         })}
+
+        {(strat?.strategies.length ?? 0) > 0 && (
+          <>
+            <h1 style={{ fontSize: 16, marginTop: 16 }}>貯金の運用（1inch Aqua）</h1>
+            {strat!.strategies.map((st) => (
+              <div className="card" key={st.id}>
+                <p>
+                  <b>{st.usdc_amount} USDC + {st.weth_amount} mWETH</b> の AMM 戦略（手数料 0.3%・期限 {new Date(st.deadline * 1000).toLocaleString("ja-JP")}）
+                </p>
+                {st.paramsError && <p className="ng">{st.paramsError}</p>}
+                {st.status === "ready" && st.ship && (
+                  isConnected ? (
+                    <button onClick={() => ship(st)} disabled={busy}>{busy ? "…" : "承認して運用を始める（MetaMask）"}</button>
+                  ) : (
+                    <button onClick={() => connectors[0] && connectAsync({ connector: connectors[0] })} disabled={isConnecting}>
+                      {isConnecting ? "ウォレットの確認待ち…" : "ウォレットを接続して運用を始める"}
+                    </button>
+                  )
+                )}
+                {st.status === "shipped" && (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      <div>
+                        <p style={{ margin: 0 }}>ウォレット残高</p>
+                        <p className="mono" style={{ margin: 0 }}>{st.wallet ? `${st.wallet.usdc} USDC / ${st.wallet.weth} mWETH` : "…"}</p>
+                      </div>
+                      <div>
+                        <p style={{ margin: 0 }}>Aqua が預かっている額（仮想）</p>
+                        <p className="mono" style={{ margin: 0 }}>{st.virtual ? `${st.virtual.usdc} USDC / ${st.virtual.weth} mWETH` : "…"}</p>
+                      </div>
+                    </div>
+                    <p>お金はウォレットから出ていません。Aqua は残高を記録するだけで、動くのはスワップ成立の瞬間だけです。</p>
+                    <div className="row">
+                      <button className="ghost" onClick={() => demoSwap(st)} disabled={busy}>相棒に取引を受けさせる（デモ）</button>
+                      <button className="ghost" onClick={() => dock(st)} disabled={busy || !isConnected}>運用をやめる（dock）</button>
+                    </div>
+                  </>
+                )}
+                {st.status === "docked" && <p>運用終了済み</p>}
+                <p>
+                  {st.ship_tx && <a href={`https://sepolia.etherscan.io/tx/${st.ship_tx}`} target="_blank" rel="noreferrer">ship tx</a>}
+                  {st.ship_tx && st.dock_tx && " / "}
+                  {st.dock_tx && <a href={`https://sepolia.etherscan.io/tx/${st.dock_tx}`} target="_blank" rel="noreferrer">dock tx</a>}
+                </p>
+              </div>
+            ))}
+          </>
+        )}
 
         {s.actions.filter((a) => a.status !== "pending").slice(0, 5).map((a) => (
           <p key={a.id} className={a.status === "executed" ? "" : "ng"}>

@@ -4,6 +4,8 @@ import { decide, MAX_SINGLE_PAYMENT_USDC, type PolicyContext } from "@/lib/polic
 
 const HANA = "0x00000000000000000000000000000000000000aa";
 const ctx = (over: Partial<PolicyContext> = {}): PolicyContext => ({
+  owner: HANA,
+  ownerUsdcBalance: async () => 100,
   agentAllowanceUsdc: 50,
   resolveName: async (n) => (n === "hana.otomo.eth" || n.startsWith("0x") ? HANA : null),
   isCompanion: async (n) => n === "hana.otomo.eth",
@@ -37,6 +39,15 @@ describe("policy", () => {
     expect(over.kind).toBe("reject");
     const noAllowance = await decide({ type: "send_usdc", to: HANA, amountUsdc: 5, memo: "" }, ctx({ agentAllowanceUsdc: 1 }));
     expect(noAllowance.kind).toBe("reject");
+  });
+  it("grow_savings needs approval within the owner's balance, without using the agent cap", async () => {
+    // No agent allowance is involved — funds stay in the owner's wallet.
+    const d = await decide({ type: "grow_savings", amountUsdc: 50, days: 7 }, ctx({ agentAllowanceUsdc: 0 }));
+    expect(d).toMatchObject({ kind: "needs_approval", amountUsdc: 50 });
+  });
+  it("grow_savings rejects when the owner does not hold enough USDC", async () => {
+    const d = await decide({ type: "grow_savings", amountUsdc: 50, days: 7 }, ctx({ ownerUsdcBalance: async () => 10 }));
+    expect(d.kind).toBe("reject");
   });
   it("rejects unresolvable names and non-companion friends", async () => {
     expect((await decide({ type: "send_usdc", to: "nobody.eth", amountUsdc: 1, memo: "" }, ctx())).kind).toBe("reject");
