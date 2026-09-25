@@ -4,14 +4,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { maxUint256, parseUnits } from "viem";
 import { useAccount, useConnect, usePublicClient, useWriteContract } from "wagmi";
+import { ReputationCard } from "@/components/ReputationCard";
+import { LiveTalk } from "@/components/LiveTalk";
+import type { ReputationSnapshot } from "@/lib/reputation";
 import { CompanionAvatar } from "@/components/CompanionAvatar";
 import { ENS_SEPOLIA, erc20Abi } from "@/lib/ens";
 import { aquaAbi } from "@/lib/aquaAbi";
 import { LANG_LABELS, LANG_LOCALES, SUPPORTED_LANGS, isLang, t, type Lang, type UiKey } from "@/lib/i18n";
 
 interface Action { id: string; intent: string; amount_usdc: number; status: string; reason: string | null; tx_hash: string | null; expires_at: number }
-interface FriendReq { id: string; from_label: string; to_label: string; task: string; reward_usdc: number; status: string }
+interface FriendReq { content?: string; reviewed_at?: number; reward_action_id?: string; id: string; from_label: string; to_label: string; task: string; reward_usdc: number; status: string }
 interface State {
+  provisioning?: { status: string; error: string | null };
+  managed: boolean; reputation: ReputationSnapshot;
   label: string; fullName: string; owner: string; bound: boolean; agent: `0x${string}`; allowanceUsdc: number;
   ens: { address: string | null; mood: string | null; personality: string | null };
   actions: Action[]; inbox: FriendReq[]; outbox: FriendReq[]; messages: { role: string; content: string }[];
@@ -210,7 +215,7 @@ export default function CompanionPage() {
     }
   };
 
-  const updateReq = async (id: string, status: "accepted" | "done") => {
+  const updateReq = async (id: string, status: "accepted" | "delivered" | "done") => {
     const r = await fetch("/api/friend-requests", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, status }) });
     if (!r.ok) setError((await r.json()).error);
     load();
@@ -223,9 +228,17 @@ export default function CompanionPage() {
     return b;
   };
 
+  const prepareStrategy = async (st: StrategyRow, operation: "ship" | "dock" | "demo_swap") => {
+    setBusy(true);
+    try { await postStrategy(st.id, { event: "prepare", operation }); await load(); setNote("操作を承認待ちに追加しました。内容を確認してWorld IDで承認してください。"); }
+    catch (e) { setError(e instanceof Error ? e.message : "操作を準備できませんでした"); }
+    finally { setBusy(false); }
+  };
+
   // Maker ships the strategy herself: approve Aqua for both tokens (only if the
   // current allowance is short), then aqua.ship. The funds stay in her wallet.
   const ship = async (st: StrategyRow) => {
+    if (s?.managed) { await prepareStrategy(st, "ship"); return; }
     if (!st.ship || !publicClient || !address) return;
     setBusy(true);
     setError(null);
@@ -253,6 +266,7 @@ export default function CompanionPage() {
   };
 
   const demoSwap = async (st: StrategyRow) => {
+    if (s?.managed) { await prepareStrategy(st, "demo_swap"); return; }
     setBusy(true);
     setError(null);
     try {
@@ -267,6 +281,7 @@ export default function CompanionPage() {
   };
 
   const dock = async (st: StrategyRow) => {
+    if (s?.managed) { await prepareStrategy(st, "dock"); return; }
     if (!strat?.env || !st.strategy_hash) return;
     setBusy(true);
     setError(null);
@@ -323,6 +338,9 @@ export default function CompanionPage() {
           </label>
         </div>
         <h1>{s.fullName}</h1>
+        <button className="ghost" onClick={async () => { await fetch("/api/logout", { method: "POST" }); window.location.href = "/"; }}>ログアウト</button>
+        {s.provisioning && s.provisioning.status !== "ready" && <p className="ng">ENS登録: {s.provisioning.status}。{s.provisioning.error}</p>}
+        <ReputationCard snapshot={s.reputation} managed={s.managed} />
         <p>
           {t("moodLabel", lang)}: <b>{s.ens.mood ?? t("unset", lang)}</b> ／ {t("resolveTo", lang)}:{" "}
           <span className="mono">{s.ens.address ?? t("unresolved", lang)}</span>
@@ -362,6 +380,7 @@ export default function CompanionPage() {
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && send()} placeholder={t("placeholder", lang)} />
           <button onClick={send} disabled={busy}>{busy ? "…" : t("send", lang)}</button>
         </div>
+        <LiveTalk label={s.label} lang={lang} />
         {note && <p>{note}</p>}
         {error && <p className="ng">{error}</p>}
 
@@ -388,7 +407,7 @@ export default function CompanionPage() {
                 </p>
                 {st.paramsError && <p className="ng">{st.paramsError}</p>}
                 {st.status === "ready" && st.ship && (
-                  isConnected ? (
+                  (s.managed || isConnected) ? (
                     <button onClick={() => ship(st)} disabled={busy}>{busy ? "…" : t("ship", lang)}</button>
                   ) : (
                     <button onClick={() => connectors[0] && connectAsync({ connector: connectors[0] })} disabled={isConnecting}>
@@ -408,10 +427,10 @@ export default function CompanionPage() {
                         <p className="mono" style={{ margin: 0 }}>{st.virtual ? `${st.virtual.usdc} USDC / ${st.virtual.weth} mWETH` : "…"}</p>
                       </div>
                     </div>
-                    <p>{t("nonCustodial", lang)}</p>
+                    <p>{s.managed ? "相棒専用のテストウォレットで運用中です。鍵はサーバーが管理します。" : t("nonCustodial", lang)}</p>
                     <div className="row">
                       <button className="ghost" onClick={() => demoSwap(st)} disabled={busy}>{t("demoSwap", lang)}</button>
-                      <button className="ghost" onClick={() => dock(st)} disabled={busy || !isConnected}>{t("dock", lang)}</button>
+                      <button className="ghost" onClick={() => dock(st)} disabled={busy || (!s.managed && !isConnected)}>{t("dock", lang)}</button>
                     </div>
                   </>
                 )}
@@ -428,7 +447,7 @@ export default function CompanionPage() {
 
         {s.actions.filter((a) => a.status !== "pending").slice(0, 5).map((a) => (
           <p key={a.id} className={a.status === "executed" ? "" : "ng"}>
-            {a.status}: {a.reason ?? ""}{" "}
+            {a.reason === "executing" ? "処理中" : a.reason === "confirmation_pending" ? "チェーンでの確定を確認中" : a.status}: {a.reason === "executing" || a.reason === "confirmation_pending" ? "" : a.reason ?? ""}{" "}
             {a.tx_hash && <a href={`https://sepolia.etherscan.io/tx/${a.tx_hash}`} target="_blank" rel="noreferrer">tx</a>}
           </p>
         ))}
@@ -438,18 +457,26 @@ export default function CompanionPage() {
           <div className="card" key={r.id}>
             <p>{t("inboxItem", lang, { from: r.from_label, task: r.task, reward: r.reward_usdc, status: r.status })}</p>
             {r.status === "open" && <button onClick={() => updateReq(r.id, "accepted")}>{t("accept", lang)}</button>}
-            {r.status === "accepted" && <button onClick={() => updateReq(r.id, "done")}>{t("done", lang)}</button>}
+            {r.status === "accepted" && <button onClick={() => updateReq(r.id, "delivered")}>作業して納品する</button>}
+            {r.status === "working" && <div><p>成果物を作成中です。5分以上応答がない場合は再試行できます。</p><button onClick={() => updateReq(r.id, "delivered")}>納品処理を再試行</button></div>}
+            {r.content && <pre style={{ whiteSpace: "pre-wrap" }}>{r.content}</pre>}
           </div>
         ))}
 
-        <div className="card">
+        {s.outbox.map(r => <div className="card" key={r.id}>
+          <p>{r.to_label} への依頼: {r.task} · {r.status}</p>
+          {r.content && <pre style={{ whiteSpace: "pre-wrap" }}>{r.content}</pre>}
+          {r.status === "delivered" && <button onClick={() => updateReq(r.id, "done")}>成果物を検収する（報酬は別途World ID承認）</button>}
+          {r.reward_action_id && <p>報酬は承認待ち一覧で確認できます。</p>}
+        </div>)}
+        {!s.managed && <div className="card">
           <p>{t("allowanceInfo", lang, { amount: s.allowanceUsdc })}</p>
           <div className="row">
             <input value={cap} onChange={(e) => setCap(e.target.value.replace(/[^0-9.]/g, ""))} />
             <button className="ghost" onClick={approveCap}>{t("setCap", lang)}</button>
             <button className="ghost" onClick={mintTestUsdc} disabled={!address}>{t("mint", lang)}</button>
           </div>
-        </div>
+        </div>}
       </section>
     </main>
   );
