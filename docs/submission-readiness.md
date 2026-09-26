@@ -11,5 +11,5 @@ Deadline: September 27, 2026, 09:00 JST.
 | World ID for Agents | Fresh Sandbox verification per money-moving action; expired approval shown executing nothing; debrief in `world-debrief.md` |
 | ENSv2 | Subnames with Permissioned Resolvers on Sepolia, records used by the product |
 | 1inch Aqua | Canonical Aqua registry on Sepolia, redeployed SwapVM router, ship/swap/dock receipts, multi-day commit history |
-| Video | Footage done (`work/video/out/otomo-demo-v8.mp4`, 3:43, 1080p, English subtitles). Waiting for the creator's Japanese narration, then upload |
+| Video | Final: `work/video/out/otomo-demo-v9.mp4` (3:35, 1080p30, creator's Japanese voice, English subtitles). Upload and add the link |
 | Dashboard | Paste `submission-entry.md`, add video link, select prizes, submit (creator) |
