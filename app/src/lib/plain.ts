@@ -1,4 +1,6 @@
-// Plain-language formatting for non-technical users. Server- and client-safe (no imports).
+// Plain-language formatting for non-technical users. Safe for server and client imports.
+
+import { t, type Lang } from "@/lib/i18n";
 
 export interface PendingIntent {
   type?: string;
@@ -13,31 +15,38 @@ export interface PendingIntent {
 }
 
 /** One friendly sentence describing what a pending action will do. */
-export function intentPlainText(intent: PendingIntent): string {
+export function intentPlainText(intent: PendingIntent, lang: Lang): string {
   switch (intent.type) {
     case "send_usdc":
-      return `${intent.to ?? "（不明な宛先）"} に ${intent.amountUsdc ?? "?"} ドルを送っていい？`;
+      return t("plainSend", lang, {
+        to: intent.to ?? t("unknownRecipient", lang),
+        amount: intent.amountUsdc ?? "?",
+      });
     case "request_friend":
-      return `${intent.friend ?? "お友達"} に「${intent.task ?? ""}」を頼んでいい？（お礼 ${intent.rewardUsdc ?? 0} ドル）`;
+      return t("plainFriendRequest", lang, {
+        friend: intent.friend ?? t("friendFallback", lang),
+        task: intent.task ?? "",
+        reward: intent.rewardUsdc ?? 0,
+      });
     case "grow_savings":
-      return `${intent.amountUsdc ?? "?"} ドルを増やす運用を始めていい？`;
+      return t("plainSavings", lang, { amount: intent.amountUsdc ?? "?" });
     case "private_task":
-      return `ひみつのお願い: ${intent.summary ?? ""}`;
+      return t("plainPrivate", lang, { summary: intent.summary ?? "" });
     case "update_mood":
-      return "気分を更新していい？";
+      return t("plainMood", lang);
     default:
-      return "このお願いを実行していい？";
+      return t("plainUnknown", lang);
   }
 }
 
-const STAGE_TEXT: Record<string, string> = {
-  preparing: "性格を考えています…",
-  funding: "おうちを準備しています…",
-  deploying_resolver: "おうちを準備しています…",
-  registering_name: "名前を登録しています…",
-  ready: "もうすぐ会えます！",
-  needs_review: "登録を確認しています…",
-};
+const STAGE_KEY = {
+  preparing: "birthStagePreparing",
+  funding: "birthStageFunding",
+  deploying_resolver: "birthStageFunding",
+  registering_name: "birthStageRegistering",
+  ready: "birthStageReady",
+  needs_review: "birthStageReview",
+} as const;
 
 const STAGE_PROGRESS: Record<string, number> = {
   preparing: 0.15,
@@ -48,21 +57,21 @@ const STAGE_PROGRESS: Record<string, number> = {
   needs_review: 0.9,
 };
 
-export const birthStageText = (stage: string) => STAGE_TEXT[stage] ?? "準備しています…";
+export const birthStageText = (stage: string, lang: Lang) => t(STAGE_KEY[stage as keyof typeof STAGE_KEY] ?? "birthStageFallback", lang);
 export const birthStageProgress = (stage: string) => STAGE_PROGRESS[stage] ?? 0.1;
 
 /** Friend-request status in words. */
-export function requestStatusText(status: string): string {
+export function requestStatusText(status: string, lang: Lang): string {
   switch (status) {
     case "open":
-      return "返事待ち";
+      return t("requestStatusOpen", lang);
     case "accepted":
     case "working":
-      return "作業中";
+      return t("requestStatusWorking", lang);
     case "delivered":
-      return "届きました";
+      return t("requestStatusDelivered", lang);
     case "done":
-      return "完了";
+      return t("requestStatusDone", lang);
     default:
       return status;
   }

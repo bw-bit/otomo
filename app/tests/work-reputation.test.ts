@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { openDb, type Db } from '@/lib/db';
-import { acceptWork, deliverWork, reviewWork } from '@/lib/work';
+import { acceptWork, deliverWork, reviewWork, renewWorkReward } from '@/lib/work';
 import { reputationSnapshot, recheckPublication } from '@/lib/reputation';
 import { createBirthChallenge, consumeBirthChallenge } from '@/lib/birth-challenge';
 let db: Db; let dir: string;
@@ -42,6 +42,16 @@ it('model failure leaves request retryable with no delivery or payment',async()=
  await expect(deliverWork(db,'work1','bob',async()=>{throw Error('offline')})).rejects.toThrow();
  expect((await db.execute("SELECT status FROM friend_requests WHERE id='work1'")).rows[0].status).toBe('accepted');
  expect((await db.execute('SELECT COUNT(*) AS n FROM work_deliveries')).rows[0].n).toBe(0);
+});
+it('renews only expired unpaid rewards, without duplicating or replaying payment', async()=>{
+ await acceptWork(db,'work1','bob'); await deliverWork(db,'work1','bob',async()=> 'done');
+ const id=await reviewWork(db,'work1','alice',1000);
+ await expect(renewWorkReward(db,'work1','bob',302000)).rejects.toThrow();
+ await expect(renewWorkReward(db,'work1','alice',2000)).rejects.toThrow();
+ expect(await renewWorkReward(db,'work1','alice',302000)).toBe(id);
+ expect((await db.execute('SELECT COUNT(*) AS n FROM pending_actions')).rows[0].n).toBe(1);
+ await db.execute("UPDATE pending_actions SET status='executed',reason=NULL,tx_hash='0xreceipt'");
+ await expect(renewWorkReward(db,'work1','alice',999000)).rejects.toThrow();
 });
 it('birth challenges expire and cannot be replayed across database connections',async()=>{
  const a=await createBirthChallenge(db,1000);

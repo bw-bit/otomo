@@ -1,5 +1,15 @@
 # Otomo 引き継ぎ（Codex向け）— 2026-09-26 時点
 
+## 更新（2026-09-26 15:02 JST）
+
+- UIとAqua改修をVercel `otomo` 本番へ反映済み。deployment `dpl_FhLkgY7JY1Um7ruybYaGsx8eoyMu` はREADYで `otomo-world-id.vercel.app` aliasを確認。既存の別プロジェクト `app` には触れていない。
+- 英語既定・日本語選択の永続化、入力欄内マイク、常時見える読み上げ切替、公開プロフィールの実績カードと公開範囲説明を実装。Three.jsの表情/耳/口/反応を追加。相棒切替で全画面遷移せずモデルを保持し、CDPではhistoryApi遷移のみであることを確認。
+- 仕事デモは実LLMとSepolia ENS読み取りを使い、隔離ローカルDBで依頼→受諾→納品→検収。題材はOtomo英日紹介文と3手順、報酬2 mUSDC。別のローカルAnvilテストで実ERC20支払いと二重承認拒否を確認。本番sora/taroの実機承認・報酬送金は今回行っていない。
+- AquaはSepoliaでoperatorをmaker、agentをtakerとしてmint/approve/ship/swap/dockの9取引を実送信。0.001 mWETH → 1.662497 mUSDC、手数料0.3%。ship `0x2b8f3af1c6e49054b15f7bc07b4dc9be227e60c3e0f056a1114d48b9b7db7d18`、swap `0x7dbf03bc50574fd23efc4bf2c66721e3bbe519d49f72f4fd3912f20ee0ea5783`、dock `0xa294df6cd6a02627c125a2f266a14612f6f3ec2b3667f7a84a99c292d285368e`。3 receiptを親側で再読確認。sora/taroの資金と本番DB strategyは変更していない。
+- Aqua画面は不足テストトークン取得、戦略残高とウォレット残高、固定デモ比率と手数料を表示。`fund_demo` は本人セッションのready戦略のみ、固定Sepolia mock token、不足分のみ、20 mUSDC＋等価mWETH上限、専用相棒ウォレットの署名に限定。ship/swap/dockは従来の本人承認を維持。
+- 最終アプリ98 tests、コントラクト7 tests、lint/build成功。opt-inの実LLM仕事1件・Anvil報酬1件も別実行で成功。ライブ音声のマイク接続と本番での実機World承認の往復は未実施。声のオン/オフと選択言語のAPIテストは確認済み。
+- 証拠は `work/aqua-demo/parent-verification.json` と呼出元チャットの `outputs/demo-results.md`。誕生/ログインの古い記録や未検証表記は以下の時点の履歴として読む。
+
 ## プロジェクト概要
 
 - リポジトリ: `/Users/R/hackathon/otomo`（GitHub: bw-bit/otomo, branch `main`）

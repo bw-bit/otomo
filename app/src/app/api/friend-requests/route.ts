@@ -2,11 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
 import { SESSION_COOKIE, readSession } from "@/lib/session";
-import { acceptWork, deliverWork, reviewWork } from "@/lib/work";
+import { acceptWork, deliverWork, reviewWork, renewWorkReward } from "@/lib/work";
 import { openAiCompatibleChat } from "@/lib/llm";
 
 export const runtime = "nodejs";
-const bodySchema = z.object({ id: z.string(), status: z.enum(["accepted", "delivered", "done"]) });
+const bodySchema = z.object({ id: z.string(), status: z.enum(["accepted", "delivered", "done", "renew_reward"]) });
 export async function POST(req: NextRequest): Promise<Response> {
   const label = readSession(req.cookies.get(SESSION_COOKIE)?.value);
   if (!label) return NextResponse.json({ error: "not signed in" }, { status: 401 });
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const { id, status } = body.data;
     if (status === "accepted") await acceptWork(db, id, label);
     else if (status === "delivered") await deliverWork(db, id, label, openAiCompatibleChat);
+    else if (status === "renew_reward") await renewWorkReward(db, id, label);
     else await reviewWork(db, id, label);
     return NextResponse.json({ ok: true });
   } catch (e) {

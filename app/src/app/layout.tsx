@@ -10,13 +10,13 @@ const notoSC = Noto_Sans_SC({ weight: ["400", "700"], subsets: ["latin"], variab
 const notoKR = Noto_Sans_KR({ weight: ["400", "700"], subsets: ["latin"], variable: "--font-noto-kr" });
 
 export const metadata: Metadata = {
-  title: "Otomo — 世界に一人の相棒",
+  title: "Otomo — Your AI companion",
   description: "顔で生まれる、あなただけの相棒エージェント",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ja" className={`${mPlus.variable} ${notoSC.variable} ${notoKR.variable}`}>
+    <html lang="en" className={`${mPlus.variable} ${notoSC.variable} ${notoKR.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

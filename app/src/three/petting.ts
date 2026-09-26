@@ -85,9 +85,11 @@ export function createPetting(opts: {
   };
 
   const onDown = (e: PointerEvent) => {
+    if (down.active || !e.isPrimary || e.button !== 0) return;
     ndc(e);
     const found = pick();
     if (!found) return;
+    dom.setPointerCapture(e.pointerId);
     down.active = true;
     down.at = performance.now();
     down.x = pointer.x;
@@ -104,16 +106,17 @@ export function createPetting(opts: {
     );
   };
 
-  const onUp = () => {
+  const onUp = (e: PointerEvent) => {
     if (!down.active) return;
     down.active = false;
+    if (dom.hasPointerCapture(e.pointerId)) dom.releasePointerCapture(e.pointerId);
     dom.style.cursor = hover ? "grab" : "";
     const t = down.target;
     down.target = null;
     if (!t) return;
     t.model.setStretch(new THREE.Vector3());
     t.model.squash(0.1); // rebound wobble
-    const quick = performance.now() - down.at < TAP_MS && !down.dragged;
+    const quick = e.type === "pointerup" && performance.now() - down.at < TAP_MS && !down.dragged;
     if (quick) {
       t.model.hop();
       opts.onTap?.(t, t.object.getWorldPosition(new THREE.Vector3()));

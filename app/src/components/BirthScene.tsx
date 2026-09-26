@@ -271,7 +271,7 @@ export function BirthScene({ phase, seed, previewSeed = null, pokeNonce = 0, cla
       const visibleH = Math.max(140, Math.min(freeTop, hostH));
       const shiftPx = Math.min(Math.max((hostH - visibleH) / 2, 0), hostH * 0.3);
       const worldPerPx = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z) / hostH;
-      rig.position.y = damp(rig.position.y, 0.55 + shiftPx * worldPerPx, 4, dt);
+      rig.position.y = damp(rig.position.y, 0.3 + shiftPx * worldPerPx, 4, dt);
       rigScale = damp(rigScale, 0.74 * Math.max(0.5, Math.min(1, visibleH / (hostH * 0.55))), 4, dt);
       rig.scale.setScalar(rigScale);
       particles.points.position.copy(rig.position);

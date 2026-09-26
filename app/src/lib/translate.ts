@@ -7,7 +7,7 @@ import { LANG_NAMES, type Lang } from "./i18n";
 
 /** Cache key: the pair (text, lang) is unambiguous because lang is fixed-width. */
 export const translationHash = (text: string, lang: Lang) =>
-  createHash("sha256").update(text).update("\n").update(lang).digest("hex");
+  createHash("sha256").update("otomo-context-v2\n").update(text).update("\n").update(lang).digest("hex");
 
 const replySchema = z.array(z.string());
 
@@ -43,6 +43,7 @@ export async function translateTexts(
           content:
             `You are a translator. The user message is a JSON array of strings. ` +
             `Translate each element into natural ${LANG_NAMES[target]}. ` +
+            `Context: Otomo companions are AI characters owned by the user. Requests for approval address the human owner as 'you', never another companion. Preserve companion names, token symbols and amounts. ` +
             `Return only the JSON array of strings, in the same order and with the same length.`,
         },
         { role: "user", content: JSON.stringify(missing) },

@@ -117,20 +117,28 @@ describe("translateTexts", () => {
 });
 
 describe("i18n", () => {
-  it("has a non-empty ja string and all four languages for every key", () => {
+  it("has a non-empty English base string and all four languages for every key", () => {
     for (const [key, entry] of Object.entries(UI_STRINGS)) {
-      expect(entry.ja.length, key).toBeGreaterThan(0);
+      expect(entry.en.length, key).toBeGreaterThan(0);
       for (const lang of SUPPORTED_LANGS) {
         expect((entry as Record<string, string>)[lang], `${key}.${lang}`).toBeTruthy();
       }
     }
   });
-  it("falls back to ja when a language is missing and to interpolation vars", () => {
-    expect(pickEntry({ ja: "あ" }, "en")).toBe("あ");
-    expect(pickEntry({ ja: "あ", en: "a" }, "en")).toBe("a");
-    expect(pickEntry({ ja: "{n} 件" }, "en", { n: 3 })).toBe("3 件");
+  it("falls back to English when a translation is missing and interpolates variables", () => {
+    expect(pickEntry({ en: "base" }, "ja")).toBe("base");
+    expect(pickEntry({ en: "a", ja: "あ" }, "ja")).toBe("あ");
+    expect(pickEntry({ en: "{n} items" }, "ko", { n: 3 })).toBe("3 items");
     expect(t("send", "en")).toBe("Send");
     expect(t("send", "ja")).toBe("送る");
+    expect(t("liveTalk", "en")).toBe("Voice");
+    expect(t("liveTalk", "ja")).toBe("音声");
+    expect(t("liveTalk", "zh")).toBe("语音");
+    expect(t("liveTalk", "ko")).toBe("음성");
+    expect(t("liveStop", "en")).toBe("End");
+    expect(t("liveStop", "ja")).toBe("終了");
+    expect(t("liveStop", "zh")).toBe("结束");
+    expect(t("liveStop", "ko")).toBe("종료");
   });
   it("isLang accepts only supported languages", () => {
     for (const l of SUPPORTED_LANGS) expect(isLang(l)).toBe(true);

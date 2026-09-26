@@ -17,10 +17,11 @@ process.env.APP_SECRET = "test-secret";
 const PERSONALITY = JSON.stringify({ firstPerson: "おれ", tone: "冷静", strengths: ["先回り"], catchphrase: "任せろ" });
 const ENV: LiveEnv = { apiKey: "k", model: DEFAULT_LIVE_MODEL };
 
-const req = (withSession = true, label = "taro") =>
+const req = (withSession = true, label = "taro", lang?: string) =>
   new NextRequest("http://localhost/api/live/token", {
     method: "POST",
     headers: withSession ? { cookie: `otomo_session=${sessionValue(label)}` } : {},
+    ...(lang === undefined ? {} : { body: JSON.stringify({ lang }) }),
   });
 
 let db: Db;
@@ -55,6 +56,7 @@ describe("liveSystemPrompt", () => {
     const p = liveSystemPrompt("taro", "taro.otomo.eth", { firstPerson: "おれ", tone: "冷静", strengths: ["先回り"], catchphrase: "任せろ" });
     expect(p).toContain("taro.otomo.eth");
     expect(p).toContain("音声会話");
+    expect(p).toContain("Speak in English");
   });
 });
 
@@ -89,6 +91,21 @@ describe("handleLiveToken", () => {
     expect(body.model).toBe(DEFAULT_LIVE_MODEL);
     expect(TTS_VOICES).toContain(body.config.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName);
     expect(String(body.config.systemInstruction)).toContain("taro.otomo.eth");
+    expect(String(body.config.systemInstruction)).toContain("Speak in English");
     expect(issueToken).toHaveBeenCalledWith("k", DEFAULT_LIVE_MODEL, expect.objectContaining({ responseModalities: ["AUDIO"] }));
+  });
+  it("locks the voice prompt to the selected Japanese language", async () => {
+    issueToken.mockClear();
+    const res = await handleLiveToken(req(true, "taro", "ja"), { env: ENV, db: async () => db, issueToken });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.config.systemInstruction).toContain("Speak in Japanese");
+    expect(issueToken).toHaveBeenCalledWith("k", DEFAULT_LIVE_MODEL, expect.objectContaining({ systemInstruction: expect.stringContaining("Speak in Japanese") }));
+  });
+  it("rejects an unsupported language before minting a token", async () => {
+    issueToken.mockClear();
+    const res = await handleLiveToken(req(true, "taro", "unsupported"), { env: ENV, db: async () => db, issueToken });
+    expect(res.status).toBe(400);
+    expect(issueToken).not.toHaveBeenCalled();
   });
 });

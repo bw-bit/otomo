@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { t as translate, type Lang, type UiKey } from "@/lib/i18n";
 import { createCompanion, hsl, type CompanionModel } from "@/three/companionModel";
 import { createPetting, petLine, type PetTarget } from "@/three/petting";
 import { createSparkles } from "@/three/sparkles";
@@ -16,14 +17,22 @@ export interface RoomCompanion {
 interface Props {
   companions: RoomCompanion[];
   current: string;
-  onSelect: (label: string) => void;
+  onSelect: (label: string) => Promise<void>;
   /** Latest assistant line, shown as a speech bubble over the current companion. */
   bubble?: string;
   thinking?: boolean;
   className?: string;
+  lang: Lang;
 }
 
-const ROLE_TAG: Record<string, string> = { personal: "くらし", work: "しごと" };
+const ROLE_TAG_KEY: Record<string, UiKey> = { personal: "roleTagPersonal", work: "roleTagWork" };
+const PET_LINE_KEY: Record<string, UiKey> = {
+  "えへへ": "petHappy",
+  "くすぐったい〜": "petTicklish",
+  "なあに？": "petWhat",
+  "もっとなでて": "petMore",
+  "ぷよん": "petBoing",
+};
 const damp = (cur: number, target: number, rate: number, dt: number) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
 
 interface Rec {
@@ -37,6 +46,7 @@ interface Rec {
   nextIdle: number;
   glanceUntil: number;
   glanceX: number;
+  tagText: string;
 }
 
 /** World-space half-width of a companion incl. breathing room, per render scale. */
@@ -44,10 +54,10 @@ const RADIUS_CURRENT = 1.25;
 const RADIUS_SIBLING = 1.0;
 const SLOT_GAP = 0.55;
 
-export function CompanionRoom({ companions, current, onSelect, bubble, thinking, className }: Props) {
+export function CompanionRoom({ companions, current, onSelect, bubble, thinking, className, lang }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
-  const propsRef = useRef({ companions, current, onSelect, bubble, thinking });
-  propsRef.current = { companions, current, onSelect, bubble, thinking };
+  const propsRef = useRef({ companions, current, onSelect, bubble, thinking, lang });
+  propsRef.current = { companions, current, onSelect, bubble, thinking, lang };
 
   useEffect(() => {
     const host = hostRef.current;
@@ -103,6 +113,9 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
 
     const bubbleEl = document.createElement("div");
     bubbleEl.className = "roombubble";
+    const bubbleTextEl = document.createElement("span");
+    bubbleTextEl.className = "roombubble-copy";
+    bubbleEl.appendChild(bubbleTextEl);
     host.appendChild(bubbleEl);
 
     const petBubbles = new Set<HTMLDivElement>();
@@ -111,7 +124,8 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
       const r = host.getBoundingClientRect();
       const el = document.createElement("div");
       el.className = "petbubble";
-      el.textContent = petLine();
+      const reaction = petLine();
+      el.textContent = translate(PET_LINE_KEY[reaction] ?? "petHappy", propsRef.current.lang);
       const px = ((p.x + 1) / 2) * r.width;
       const py = ((1 - p.y) / 2) * r.height;
       el.style.left = `${Math.min(Math.max(px, 44), r.width - 44)}px`;
@@ -127,6 +141,11 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
     let records: Rec[] = [];
     let buildKey = "";
     let swapping = false;
+    let disposed = false;
+    let swapTimer: number | undefined;
+    let framed = false;
+    let lastBubble = "";
+    let talkUntil = 0;
 
     /** Siblings alternate left/right of the current pet, spaced by radius + gap so they never overlap. */
     const slots = () => {
@@ -152,15 +171,24 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
     };
 
     const rebuild = () => {
-      for (const r of records) {
+      const wanted = new Set(propsRef.current.companions.map(c => c.full_name));
+      for (const r of records.filter(r => !wanted.has(r.info.full_name))) {
         scene.remove(r.model.group, r.shadow);
         r.model.dispose();
+        r.shadow.geometry.dispose();
         (r.shadow.material as THREE.Material).dispose();
         r.tag.remove();
       }
-      records = [];
+      records = records.filter(r => wanted.has(r.info.full_name));
       const slotMap = slots();
       for (const info of propsRef.current.companions) {
+        const existing = records.find(r => r.info.full_name === info.full_name);
+        if (existing) {
+          existing.info = info;
+          existing.target.copy(slotMap.get(info.label)!.pos);
+          existing.scaleTarget = slotMap.get(info.label)!.scale;
+          continue;
+        }
         const model = createCompanion(traitsFromSeed(info.full_name));
         const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.95, 32), shadowMat());
         shadow.rotation.x = -Math.PI / 2;
@@ -173,7 +201,9 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
         tag.className = "roomtag";
         tag.innerHTML = `<b></b> <span></span>`;
         tag.querySelector("b")!.textContent = info.label;
-        tag.querySelector("span")!.textContent = `· ${ROLE_TAG[info.role] ?? info.role}`;
+        const roleKey = ROLE_TAG_KEY[info.role];
+        const roleText = roleKey ? translate(roleKey, propsRef.current.lang) : info.role;
+        tag.querySelector("span")!.textContent = `· ${roleText}`;
         host.appendChild(tag);
         const idle = mulberry32(seedToInt(info.label));
         records.push({
@@ -187,6 +217,7 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
           nextIdle: 3 + idle() * 6,
           glanceUntil: -1,
           glanceX: 0,
+          tagText: roleText,
         });
       }
     };
@@ -210,7 +241,7 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
         sparkles.burst(world.clone().add(new THREE.Vector3(0, 0.75, 0)));
         spawnPetBubble(world);
         const rec = records.find((r) => r.model === t.model);
-        if (rec && rec.info.label !== propsRef.current.current && !swapping) {
+        if (rec && rec.info.label !== propsRef.current.current && !swapping && !propsRef.current.thinking) {
           swapping = true;
           const cur = records.find((r) => r.info.label === propsRef.current.current);
           // Walk the picked sibling forward while the current one steps aside.
@@ -220,7 +251,10 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
           }
           rec.target.set(0, 0, 0.55);
           rec.scaleTarget = 1;
-          window.setTimeout(() => propsRef.current.onSelect(rec.info.label), reduced ? 350 : 900);
+          swapTimer = window.setTimeout(async () => {
+            try { await propsRef.current.onSelect(rec.info.label); }
+            finally { if (!disposed) { swapping = false; rebuild(); } }
+          }, reduced ? 350 : 900);
         }
       },
     });
@@ -233,6 +267,10 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
       const dt = Math.min(clock.getDelta(), 1 / 20);
       const t = clock.elapsedTime;
       const p = propsRef.current;
+      if ((p.bubble ?? "") !== lastBubble) {
+        lastBubble = p.bubble ?? "";
+        talkUntil = t + Math.min(5, lastBubble.length * 0.05);
+      }
 
       const key = `${p.companions.map((c) => c.label).join(",")}|${p.current}`;
       if (key !== buildKey) {
@@ -252,10 +290,17 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
 
       for (const r of records) {
         const isCur = r.info.label === p.current;
+        const roleKey = ROLE_TAG_KEY[r.info.role];
+        const roleText = roleKey ? translate(roleKey, p.lang) : r.info.role;
+        if (r.tagText !== roleText) {
+          r.tag.querySelector("span")!.textContent = `· ${roleText}`;
+          r.tagText = roleText;
+        }
         // Walk toward the slot; scale eases with it.
         r.model.group.position.x = damp(r.model.group.position.x, r.target.x, 4, dt);
         r.model.group.position.z = damp(r.model.group.position.z, r.target.z, 4, dt);
         r.scale = damp(r.scale, r.scaleTarget, 4, dt);
+        r.model.setMood(isCur && p.thinking ? "thinking" : isCur && t < talkUntil ? "talking" : "idle");
         r.model.update(t, dt);
         r.model.group.scale.multiplyScalar(r.scale);
 
@@ -274,7 +319,7 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
         }
 
         // Thinking sway on the current companion.
-        r.model.group.rotation.z = isCur && p.thinking ? Math.sin(t * 3.2) * 0.05 : damp(r.model.group.rotation.z, 0, 6, dt);
+        if (isCur && p.thinking && !reduced) r.model.group.rotation.z += Math.sin(t * 3.2) * 0.035;
 
         // Contact shadow follows the feet; it tightens when the pet hops.
         r.shadow.position.x = r.model.group.position.x;
@@ -299,14 +344,16 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
       const totalHalf = records.reduce((m, r) => Math.max(m, Math.abs(r.target.x) + RADIUS_SIBLING * r.scaleTarget), RADIUS_CURRENT) + 0.4;
       const distW = totalHalf / (tanHalf * Math.max(camera.aspect, 0.3));
       const distH = 1.65 / tanHalf;
-      camera.position.z = damp(camera.position.z, Math.max(5.4, distW, distH), 3, dt);
+      const fit = Math.max(5.4, distW, distH);
+      camera.position.z = framed ? damp(camera.position.z, fit, 3, dt) : fit;
+      framed = true;
       floor.scale.x = (totalHalf + 1.9) / 4.6;
 
       // Speech bubble over the current companion: latest assistant line, or "…" while thinking.
       const cur = records.find((r) => r.info.label === p.current);
       if (cur) {
         const text = p.thinking ? "…" : p.bubble ?? "";
-        if (bubbleEl.textContent !== text) bubbleEl.textContent = text;
+        if (bubbleTextEl.textContent !== text) bubbleTextEl.textContent = text;
         bubbleEl.classList.toggle("show", text.length > 0);
         cur.model.group.getWorldPosition(worldV);
         worldV.y += 1.45;
@@ -326,6 +373,8 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
     });
 
     return () => {
+      disposed = true;
+      window.clearTimeout(swapTimer);
       renderer.setAnimationLoop(null);
       ro.disconnect();
       petting.dispose();

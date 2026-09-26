@@ -4,6 +4,7 @@ import { personalitySchema, type Personality } from "@/lib/llm";
 import { SESSION_COOKIE, readSession } from "@/lib/session";
 import { issueLiveToken, liveConnectConfig, liveEnv, liveSystemPrompt, type LiveEnv, type TokenIssuer } from "@/lib/live";
 import { pickVoice } from "@/lib/tts";
+import { isLang } from "@/lib/i18n";
 
 export const runtime = "nodejs";
 
@@ -23,6 +24,10 @@ export async function handleLiveToken(req: NextRequest, deps: LiveTokenDeps): Pr
   if (!label) return NextResponse.json({ error: "相棒の持ち主としてログインしていません" }, { status: 401 });
   if (!deps.env) return NextResponse.json({ error: "音声会話は設定されていません" }, { status: 503 });
 
+  const body = await req.json().catch(() => null);
+  const lang = body?.lang ?? "en";
+  if (!isLang(lang)) return NextResponse.json({ error: "unsupported language" }, { status: 400 });
+
   try {
     const db = await deps.db();
     const c = (await db.execute({ sql: `SELECT * FROM companions WHERE label = ?`, args: [label] })).rows[0] as unknown as Companion | undefined;
@@ -36,7 +41,7 @@ export async function handleLiveToken(req: NextRequest, deps: LiveTokenDeps): Pr
     }
 
     const voice = pickVoice(c.label);
-    const config = liveConnectConfig(liveSystemPrompt(c.label, c.full_name, personality), voice);
+    const config = liveConnectConfig(liveSystemPrompt(c.label, c.full_name, personality, lang), voice);
     const token = await (deps.issueToken ?? issueLiveToken)(deps.env.apiKey, deps.env.model, config);
     return NextResponse.json({ token, model: deps.env.model, config });
   } catch (e) {

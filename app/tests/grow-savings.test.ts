@@ -13,7 +13,7 @@ vi.mock("@/lib/aqua", async (importOriginal) => {
       strategy: "0xdeadbeef" as never,
       deadline: 1_900_000_000,
       usdcAmount: 100,
-      wethAmount: 0.025,
+      wethAmount: 0.05,
     })),
   };
 });
@@ -77,7 +77,7 @@ describe("executeApprovedAction grow_savings", () => {
     expect(row.maker).toBe(companion.owner);
     expect(row.strategy).toBe("0xdeadbeef");
     expect(row.usdc_amount).toBe(100);
-    expect(row.weth_amount).toBe(0.025);
+    expect(row.weth_amount).toBe(0.05);
     expect(row.deadline).toBe(1_900_000_000);
     expect(row.strategy_hash).toBeNull();
   });

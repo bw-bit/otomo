@@ -71,3 +71,21 @@ export async function reviewWork(db: Db, id: string, label: string, now = Date.n
   } catch (error) { await tx.rollback(); throw error; }
   finally { tx.close(); }
 }
+
+/** Renew an unpaid reward's approval window; never creates a second payment. */
+export async function renewWorkReward(db: Db, id: string, label: string, now = Date.now()) {
+  const tx = await db.transaction("write");
+  try {
+    const row = (await tx.execute({ sql: `SELECT a.id FROM work_deliveries d
+      JOIN friend_requests f ON f.id=d.request_id JOIN pending_actions a ON a.id=d.reward_action_id
+      WHERE f.id=? AND f.from_label=? AND f.status='done' AND a.tx_hash IS NULL
+      AND (a.status IN ('expired','rejected') OR (a.status='pending' AND a.expires_at<?))`, args: [id,label,now] })).rows[0];
+    if (!row) throw new Error("この報酬の承認は更新できません");
+    const actionId = String(row.id);
+    await tx.execute({ sql: "DELETE FROM auth_flows WHERE kind='approve' AND ref=?", args: [actionId] });
+    await tx.execute({ sql: "UPDATE pending_actions SET status='pending',reason=NULL,created_at=?,expires_at=? WHERE id=?", args: [now,now+APPROVAL_TTL_MS,actionId] });
+    await tx.commit();
+    return actionId;
+  } catch (error) { await tx.rollback(); throw error; }
+  finally { tx.close(); }
+}

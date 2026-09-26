@@ -37,12 +37,19 @@ const pcm16ToF32 = (bytes: Uint8Array) => {
 
 type Status = "off" | "connecting" | "live";
 
+const VOICE_COPY: Record<Lang, { listening: string; details: string }> = {
+  en: { listening: "Listening…", details: "Connection details" },
+  ja: { listening: "聞いています…", details: "接続の詳細" },
+  zh: { listening: "正在聆听…", details: "连接详情" },
+  ko: { listening: "듣고 있어요…", details: "연결 정보" },
+};
+
 /**
  * Real-time voice conversation via Gemini Live. The browser connects directly
  * to Gemini over WebSocket using a single-use ephemeral token from
  * /api/live/token (the API key never reaches the client).
  */
-export function LiveTalk({ label, lang }: { label: string; lang: Lang }) {
+export function LiveTalk({ label, lang, compact = false }: { label: string; lang: Lang; compact?: boolean }) {
   const [status, setStatus] = useState<Status>("off");
   const [err, setErr] = useState<string | null>(null);
   const [userLine, setUserLine] = useState("");
@@ -54,8 +61,10 @@ export function LiveTalk({ label, lang }: { label: string; lang: Lang }) {
   const workletUrlRef = useRef<string | null>(null);
   const nextTimeRef = useRef(0);
   const sourcesRef = useRef(new Set<AudioBufferSourceNode>());
+  const attemptRef = useRef(0);
 
   const stop = () => {
+    attemptRef.current++;
     sessionRef.current?.close();
     sessionRef.current = null;
     micRef.current?.getTracks().forEach((tr) => tr.stop());
@@ -69,9 +78,11 @@ export function LiveTalk({ label, lang }: { label: string; lang: Lang }) {
     if (workletUrlRef.current) URL.revokeObjectURL(workletUrlRef.current);
     workletUrlRef.current = null;
     setStatus("off");
+    setUserLine("");
+    setBotLine("");
   };
 
-  useEffect(() => stop, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => stop, [label, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const playChunk = (base64: string) => {
     const ctx = outCtxRef.current;
@@ -116,14 +127,21 @@ export function LiveTalk({ label, lang }: { label: string; lang: Lang }) {
   };
 
   const start = async () => {
+    const attempt = ++attemptRef.current;
     setErr(null);
     setStatus("connecting");
     try {
-      const res = await fetch("/api/live/token", { method: "POST" });
+      const res = await fetch("/api/live/token", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lang }),
+      });
       const body = await res.json().catch(() => null);
+      if (attempt !== attemptRef.current) return;
       if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
 
       const { GoogleGenAI } = await import("@google/genai");
+      if (attempt !== attemptRef.current) return;
       const ai = new GoogleGenAI({ apiKey: body.token, httpOptions: { apiVersion: "v1alpha" } });
 
       const outCtx = new AudioContext();
@@ -133,26 +151,30 @@ export function LiveTalk({ label, lang }: { label: string; lang: Lang }) {
       const session = (await ai.live.connect({
         model: body.model,
         callbacks: {
-          onmessage: handleMessage,
-          onerror: (e) => setErr(e.message || "live session error"),
+          onmessage: (message) => { if (attempt === attemptRef.current) handleMessage(message); },
+          onerror: (e) => { if (attempt === attemptRef.current) { setErr(e.message || "live session error"); stop(); } },
           onclose: (e) => {
+            if (attempt !== attemptRef.current) return;
             if (e.reason) setErr(e.reason);
             stop();
           },
         },
         config: body.config,
       })) as LiveSession;
+      if (attempt !== attemptRef.current) { session.close(); return; }
       sessionRef.current = session;
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
       });
+      if (attempt !== attemptRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
       micRef.current = stream;
       const inCtx = new AudioContext({ sampleRate: 16000 });
       inCtxRef.current = inCtx;
       const url = URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" }));
       workletUrlRef.current = url;
       await inCtx.audioWorklet.addModule(url);
+      if (attempt !== attemptRef.current) return;
       const node = new AudioWorkletNode(inCtx, "pcm-tap");
       node.port.onmessage = (e: MessageEvent<Float32Array>) => {
         sessionRef.current?.sendRealtimeInput({
@@ -165,26 +187,39 @@ export function LiveTalk({ label, lang }: { label: string; lang: Lang }) {
       node.connect(silent).connect(inCtx.destination); // keep processing without mic monitoring
       setStatus("live");
     } catch (e) {
+      if (attempt !== attemptRef.current) return;
       setErr(e instanceof Error ? e.message : String(e));
       stop();
     }
   };
 
   return (
-    <div className="card">
-      <div className="row">
-        <button onClick={status === "off" ? start : stop} disabled={status === "connecting"}>
-          {status === "off" ? t("liveTalk", lang) : status === "connecting" ? t("liveConnecting", lang) : t("liveStop", lang)}
-        </button>
-        {status === "live" && <span aria-live="polite">🎙️</span>}
-      </div>
-      {status === "live" && (
-        <>
-          <p className="mono" style={{ margin: "6px 0 0" }}>{t("liveYou", lang)}{userLine}</p>
-          <p className="mono" style={{ margin: "2px 0 0" }}>{label}: {botLine}</p>
-        </>
-      )}
-      {err && <p className="ng">{t("liveFail", lang)}: {err}</p>}
+    <div className={`live-talk${compact ? " live-talk--compact" : ""}`}>
+      <button
+        type="button"
+        className={`voice-toggle${status !== "off" ? " is-active" : ""}`}
+        onClick={status === "off" ? start : stop}
+        aria-label={status === "off" ? t("liveTalk", lang) : t("liveStop", lang)}
+        aria-pressed={status !== "off"}
+        title={status === "off" ? t("liveTalk", lang) : t("liveStop", lang)}
+      >
+        <span aria-hidden="true" className="voice-symbol">{status === "off" ? "🎙" : "■"}</span>
+        <span className="voice-label">{status === "off" ? t("liveTalk", lang) : t("liveStop", lang)}</span>
+      </button>
+      {(status !== "off" || err) && <div className="voice-feedback">
+        {status !== "off" && <p className="voice-status" role="status">
+          <span className="voice-indicator" aria-hidden="true" />
+          {status === "connecting" ? t("liveConnecting", lang) : VOICE_COPY[lang].listening}
+        </p>}
+        {status === "live" && <div className="voice-transcript" aria-live="polite">
+          {userLine && <p>{t("liveYou", lang)}{userLine}</p>}
+          {botLine && <p>{label}: {botLine}</p>}
+        </div>}
+        {err && <div>
+          <p className="ng" role="alert">{t("liveFail", lang)}</p>
+          <details className="plain"><summary>{VOICE_COPY[lang].details}</summary><p className="mono">{err}</p></details>
+        </div>}
+      </div>}
     </div>
   );
 }

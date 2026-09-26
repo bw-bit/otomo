@@ -1,6 +1,7 @@
 import "server-only";
 import { Modality, type LiveConnectConfig } from "@google/genai";
 import { companionSystemPrompt, type Personality } from "./llm";
+import { LANG_NAMES, type Lang } from "./i18n";
 
 export const DEFAULT_LIVE_MODEL = "gemini-3.8-live";
 
@@ -17,13 +18,14 @@ export function liveEnv(env: Partial<NodeJS.ProcessEnv> = process.env): LiveEnv 
 }
 
 /** Spoken conversation prompt: same persona, no intent JSON (voice must never emit it). */
-export function liveSystemPrompt(label: string, fullName: string, p: Personality | null): string {
+export function liveSystemPrompt(label: string, fullName: string, p: Personality | null, lang: Lang = "en"): string {
   const persona = p
     ? companionSystemPrompt(label, fullName, p).split("\n").slice(0, 2).join("\n")
     : `あなたは「${label}」（ENS名 ${fullName}）。持ち主にとって兄弟のように信頼できる相棒です。`;
   return [
     persona,
     "これは音声会話です。話し言葉で、短く自然に答えてください。JSON・箇条書き・マークダウンは使わないでください。",
+    `Speak in ${LANG_NAMES[lang]}. This is the user's selected language. Preserve your personality while using that language.`,
   ].join("\n");
 }
 

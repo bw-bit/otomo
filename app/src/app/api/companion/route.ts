@@ -32,8 +32,8 @@ export async function GET(req: NextRequest): Promise<Response> {
       readText(c.full_name, PERSONALITY_KEY),
       managed ? Promise.resolve(20) : agentAllowanceUsdc(c.owner as Address),
       db.execute({ sql: `SELECT * FROM pending_actions WHERE companion = ? ORDER BY created_at DESC LIMIT 20`, args: [label] }),
-      db.execute({ sql: `SELECT f.*, d.content, d.reviewed_at, d.reward_action_id FROM friend_requests f LEFT JOIN work_deliveries d ON d.request_id = f.id WHERE to_label = ? ORDER BY created_at DESC`, args: [label] }),
-      db.execute({ sql: `SELECT f.*, d.content, d.reviewed_at, d.reward_action_id FROM friend_requests f LEFT JOIN work_deliveries d ON d.request_id = f.id WHERE from_label = ? ORDER BY created_at DESC`, args: [label] }),
+      db.execute({ sql: `SELECT f.*, d.content, d.reviewed_at, d.reward_action_id, a.expires_at AS reward_expires_at, a.status AS reward_status, a.reason AS reward_reason, a.tx_hash AS reward_tx_hash FROM friend_requests f LEFT JOIN work_deliveries d ON d.request_id = f.id LEFT JOIN pending_actions a ON a.id=d.reward_action_id WHERE to_label = ? ORDER BY f.created_at DESC`, args: [label] }),
+      db.execute({ sql: `SELECT f.*, d.content, d.reviewed_at, d.reward_action_id, a.expires_at AS reward_expires_at, a.status AS reward_status, a.reason AS reward_reason, a.tx_hash AS reward_tx_hash FROM friend_requests f LEFT JOIN work_deliveries d ON d.request_id = f.id LEFT JOIN pending_actions a ON a.id=d.reward_action_id WHERE from_label = ? ORDER BY f.created_at DESC`, args: [label] }),
       db.execute({ sql: `SELECT role, content FROM messages WHERE companion = ? ORDER BY id DESC LIMIT 30`, args: [label] }),
     ]);
     return NextResponse.json({

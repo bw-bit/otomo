@@ -69,6 +69,7 @@ export interface CompanionModel {
   hop(): void;
   /** Squash pose (0.18 ≈ scale y 0.82, x/z 1.1) that springs back. */
   squash(amount: number): void;
+  setMood(mood: "idle" | "thinking" | "talking" | "happy"): void;
   update(t: number, dt: number): void;
   dispose(): void;
 }
@@ -130,12 +131,14 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
         : traits.earType === "antenna"
           ? track(new THREE.SphereGeometry(0.1, 16, 12))
           : null;
+  const ears: { mesh: THREE.Mesh; rest: number; side: number }[] = [];
   if (earGeo) {
     for (const side of [-1, 1]) {
       const ear = new THREE.Mesh(earGeo, bodyMat);
       const y = traits.squash * (traits.earType === "antenna" ? 1.18 : 0.82);
       ear.position.set(side * (traits.earType === "antenna" ? 0.28 : 0.55), y, 0);
       ear.rotation.z = -side * (traits.earType === "pointy" ? 0.35 : 0.2);
+      ears.push({ mesh: ear, rest: ear.rotation.z, side });
       group.add(ear);
       if (traits.earType === "antenna") {
         const stalk = new THREE.Mesh(track(new THREE.CylinderGeometry(0.018, 0.018, 0.3, 8)), bodyMat);
@@ -198,7 +201,7 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
   group.add(mouth);
 
   const baseEyeY = traits.eyeSize * 1.15;
-  let nextBlink = 1.5;
+  let nextBlink = 1.5 + traits.hue * 2.5;
   let blinkT = -1;
 
   // Jelly state: squash scale (per axis), poke dent amount, hop height, gaze.
@@ -206,11 +209,16 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
   const pokeAmt = spring(0);
   const hopY = spring(0);
   const look = { x: 0, y: 0, tx: 0, ty: 0 };
+  let mood: "idle" | "thinking" | "talking" | "happy" = "idle";
+  let delight = 0;
+  let surprise = 0;
+  let opacity = 1;
 
   return {
     group,
     body,
     setOpacity(o) {
+      opacity = o;
       bodyMat.uniforms.uOpacity.value = o;
       eyeMat.opacity = o;
       hiMat.opacity = o;
@@ -220,6 +228,7 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
       bodyMat.uniforms.uGlow.value = g;
     },
     poke(localPoint) {
+      surprise = 0.45;
       bodyMat.uniforms.uPoke.value.copy(localPoint);
       pokeAmt.v = 1;
       pokeAmt.vel = 0;
@@ -232,6 +241,7 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
       look.ty = Math.max(-1, Math.min(1, y));
     },
     hop() {
+      delight = 2.4;
       hopY.vel += reduced ? 0 : 4.2;
       if (reduced) hopY.v = 0.25;
     },
@@ -240,8 +250,14 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
       sx.v = sz.v = 1 + amount * 0.6;
       sx.vel = sy.vel = sz.vel = 0;
     },
+    setMood(value) { mood = value; },
     update(t, dt) {
       bodyMat.uniforms.uTime.value = t;
+      delight = Math.max(0, delight - dt);
+      surprise = Math.max(0, surprise - dt);
+      const happy = mood === "happy" ? 1 : Math.min(1, delight);
+      const curious = mood === "thinking";
+      const talking = mood === "talking";
 
       stepSpring(sx, 1, dt, !!reduced);
       stepSpring(sy, 1, dt, !!reduced);
@@ -255,11 +271,14 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
       look.y += (look.ty - look.y) * ease;
 
       // Breathing: never fully still, otherwise it reads as frozen.
-      const breath = Math.sin(t * 1.6) * 0.018;
+      const breath = reduced ? 0 : Math.sin(t * 1.6) * 0.018;
       group.scale.set((1 + breath) * sx.v, (1 - breath) * sy.v, (1 + breath) * sz.v);
-      group.position.y = Math.sin(t * 0.8) * 0.06 + hopY.v;
-      group.rotation.y = Math.sin(t * 0.35) * 0.18 + look.x * 0.35;
-      group.rotation.x = -look.y * 0.12;
+      group.position.y = (reduced ? 0 : Math.sin(t * 0.8) * 0.06) + hopY.v;
+      group.rotation.y = (reduced ? 0 : Math.sin(t * 0.35) * 0.18) + look.x * 0.35;
+      group.rotation.x = -look.y * 0.12 + (talking && !reduced ? Math.sin(t * 7) * 0.025 : 0);
+      group.rotation.z = curious ? 0.10 : happy * (reduced ? 0.04 : Math.sin(t * 5) * 0.07);
+      for (const ear of ears) ear.mesh.rotation.z = ear.rest + ear.side * (happy * 0.13 + (reduced ? 0 : Math.sin(t * 3 + ear.side) * 0.045));
+      blushMat.opacity = opacity * Math.min(0.95, 0.65 + happy * 0.3);
 
       for (let i = 0; i < eyes.length; i++) {
         eyes[i].position.x = eyeBase[i].x + look.x * 0.06;
@@ -270,6 +289,11 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
       }
       mouth.position.x = mouthBase.x + look.x * 0.05;
       mouth.position.y = mouthBase.y + look.y * 0.05;
+      mouth.scale.set(1 + happy * 0.55, surprise > 0 ? 1.8 : talking ? 0.8 + (reduced ? 0.5 : Math.abs(Math.sin(t * 9)) * 1.1) : 1 + happy * 0.2, 1);
+      for (let i = 0; i < eyes.length; i++) {
+        eyes[i].scale.y = baseEyeY * (surprise > 0 ? 1.22 : 1 - happy * 0.55);
+        eyes[i].rotation.z = happy * (i === 0 ? -0.12 : 0.12);
+      }
 
       // Blink every 2.5–5.5s, 140ms close/open.
       nextBlink -= dt;

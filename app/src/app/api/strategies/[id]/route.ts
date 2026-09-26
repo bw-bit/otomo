@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import type { Hex } from "viem";
 import { getDb, type Strategy } from "@/lib/db";
-import { agentDemoSwap, confirmDock, confirmShip } from "@/lib/aqua";
+import { agentDemoSwapWithResult, confirmDock, confirmShip, fundDemoStrategy } from "@/lib/aqua";
 import { createPendingAction } from "@/lib/approval";
 import { hasCompanionWallet } from "@/lib/companion-wallet";
 import { SESSION_COOKIE, readSession } from "@/lib/session";
@@ -13,6 +13,7 @@ const bodySchema = z.discriminatedUnion("event", [
   z.object({ event: z.literal("shipped"), txHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/) }),
   z.object({ event: z.literal("docked"), txHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/) }),
   z.object({ event: z.literal("demo_swap") }),
+  z.object({ event: z.literal("fund_demo") }),
   z.object({ event: z.literal("prepare"), operation: z.enum(["ship", "dock", "demo_swap"]) }),
 ]);
 
@@ -31,6 +32,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
 
     const managed = await hasCompanionWallet(db, label);
+    if (body.data.event === "fund_demo") {
+      if (!managed) return NextResponse.json({ error: "専用ウォレットへの移行が必要です" }, { status: 403 });
+      if (row.status !== "ready") return NextResponse.json({ error: "strategy is not ready" }, { status: 409 });
+      const result = await fundDemoStrategy(db, label, row);
+      return NextResponse.json({ ok: true, ...result });
+    }
     if (managed) {
       if (body.data.event !== "prepare") return NextResponse.json({ error: "World IDによる承認が必要です" }, { status: 403 });
       const action = await createPendingAction(db, { companion: label, intent: { type: "strategy_operation", strategyId: id, operation: body.data.operation }, amountUsdc: body.data.operation === "ship" ? row.usdc_amount : 0, now: Date.now() });
@@ -58,8 +65,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       }
       case "demo_swap": {
         if (row.status !== "shipped") return NextResponse.json({ error: "strategy is not shipped" }, { status: 409 });
-        const txHash = await agentDemoSwap(row);
-        return NextResponse.json({ ok: true, txHash });
+        const result = await agentDemoSwapWithResult(row);
+        return NextResponse.json({ ok: true, ...result });
       }
     }
   } catch (e) {
