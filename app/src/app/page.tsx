@@ -221,7 +221,7 @@ export default function BirthPage() {
         ) : (
           <>
             <h1>{born.label}</h1>
-            <div className="roombubble show" style={{ position: "static", transform: "none", maxWidth: "100%" }}>{born.personality.catchphrase}</div>
+            <div className="roombubble show" style={{ position: "relative", transform: "none", maxWidth: "100%" }}>{born.personality.catchphrase}</div>
             <p>{born.personality.tone}</p>
             <div className="row">
               <Link href={`/otomo/${born.label}`}><button>会いにいく</button></Link>
