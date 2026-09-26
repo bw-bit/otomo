@@ -6,11 +6,11 @@
 
 | Item | Verified state | Remaining work |
 | --- | --- | --- |
-| ETHGlobal project | The signed-in Tokyo 2026 dashboard says no project has been created. The creation form is blank (name, category, emoji). Building from Scratch is selected. | Create the project, complete the submission and select the intended partner prizes. Nothing was submitted in this audit. |
+| ETHGlobal project | Name Otomo, AI category and emoji were entered. The guideline acknowledgement and Create project were attempted; browser control was interrupted before a saved project could be verified. Building from Scratch is selected. | Verify whether creation succeeded before retrying, complete the submission and select the intended partner prizes. |
 | Deadline | September 27, 2026, 09:00 JST. Up to three partner prizes. | Submit before the deadline. [Official details](https://ethglobal.com/events/tokyo2026/info/details). |
-| Source availability | `bw-bit/otomo` is private. Latest UI changes are local and deployed, but uncommitted. | Review the release diff for publication, commit/push it, and make the submission source publicly accessible. The current project form requires a public repository; [ENS](https://ethglobal.com/events/tokyo2026/prizes/ens) also requires accessible source and a live demo. Visibility was not changed. |
+| Source availability | `bw-bit/otomo` is public. Approval, UI and evidence changes were pushed through `cc1e812`; unauthenticated README access was verified. | Attach https://github.com/bw-bit/otomo to the submission. A separate active x402 task still has uncommitted changes; do not represent those as published by this commit. |
 | Git history / AI disclosure | Multiple incremental commits exist. Specs are in `docs/SPEC-1-app.md` and `docs/SPEC-2-aqua.md`. UI brief and AI-assisted files are documented. | Include the current specs, prompts/planning artifacts and verification records in the submitted repository. Commit timestamps alone do not prove track eligibility. |
-| Demo video | English script is prepared; recording/upload and full rehearsal remain unverified. | Video is optional in the general rules. If submitted, it must be 2–4 minutes, at least 720p, with human narration; mobile-phone recording and AI voiceover are disallowed. [Video rules](https://ethglobal.com/events/tokyo2026/info/details). |
+| Demo video | English script is prepared; recording/upload and full rehearsal remain unverified. | The project creation guidelines require a video when applying for finalist prizes. If submitted, it must be 2–4 minutes, at least 720p, with human narration; mobile-phone recording and AI voiceover are disallowed. [Video rules](https://ethglobal.com/events/tokyo2026/info/details). |
 
 ## Sponsor evidence
 
@@ -20,7 +20,7 @@
 
 **World / IDKit:** real World App birth, server verification and ENS provisioning were observed. [world-debrief.md](world-debrief.md) records success and unavailable-credential/proof-failure paths. The exact credential used in the successful birth was not conclusively retained. Do not claim a specific credential was proven on that attempt.
 
-**World ID for Agents:** the demonstrated protected actions use the official development Sandbox with mocked identity. The current [World prize page](https://ethglobal.com/events/tokyo2026/prizes/world) allows the provided development environment; production identity is not stated as a universal submission prerequisite. However, the live denied/expired/cancelled approval journey is not yet recorded, while backend failure paths are unit-tested. The complete successful Sandbox journey and integration feedback are documented.
+**World ID for Agents:** the demonstrated protected actions use the official development Sandbox with mocked identity. The current [World prize page](https://ethglobal.com/events/tokyo2026/prizes/world) allows the provided development environment; production identity is not stated as a universal submission prerequisite. Live unauthenticated and cross-origin approval requests now reject with 401/403 and unchanged action/transaction counts. The live browser cancellation/expiry journey is not yet recorded. Local tests cover cancellation, expiry and other failure paths. The complete successful Sandbox journey and integration feedback are documented.
 
 ## Product limitations and bug checks
 
@@ -29,7 +29,9 @@
 - **Fixed:** strategy fetch failure during companion switching clears old strategy data, avoiding stale balances from another companion.
 - **Fixed:** Aqua ship/swap/dock and ENS publication approvals now describe the specific operation. Malformed stored intents no longer crash rendering or expose an approval link.
 - **Clarified:** reputation counts the worker's deliveries, not outgoing requests. No metrics were fabricated or reassigned.
-- **Corrected:** README and demo script no longer say Aqua and job payment were tested only locally or that balances/strategies are zero.
+- **Corrected:** README and demo script distinguish verified deployed Sepolia flows from local tests, Sandbox identity and unresolved production Session proofs.
 - **Not reverified:** live microphone conversation, a continuous demo rehearsal and a new bilingual delivery. The existing paid delivery is English only.
 
 UI release verification: 113 tests passed; two opt-in live tests skipped. TypeScript and Vercel production build passed. The shared working copy, including separately developed x402 work, passed 140 tests with three opt-in tests skipped. That x402 work was excluded from this isolated UI release; no x402 payment or Bazaar listing is claimed here.
+
+Published source recheck: 122 tests passed, two opt-in tests skipped, clean snapshot production build passed. The shared working copy passed 150 tests with three opt-in tests skipped. World verification now checks response success and individual credential results, rejecting partial or mismatched verification. This additional verifier hardening is committed; its production deployment is not yet verified.

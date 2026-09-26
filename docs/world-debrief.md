@@ -33,3 +33,11 @@ Otomoでは1つのWorld ID識別子から相棒を最大3体（既定、`WORLD_M
 The production app subsequently completed the sora → taro request/delivery/review/reward flow and the Aqua ship/swap/dock lifecycle on Sepolia. Approvals used the Sandbox identity; receipt evidence is in `docs/evidence/sepolia-demo.json`.
 
 A separate production IDKit Session-proof enrollment was attempted in World App and returned `world_id_4_not_available`. No production human session was accepted by the backend. This path is not equivalent to birth Action reuse and does not prove that the user failed because they were already verified. The UI now explains the unresolved compatibility issue, avoids claiming enrollment/execution, and prevents reuse of expired challenges. Production sensitive-action approval remains unverified.
+
+## Submission preparation — 2026-09-26
+
+The live approval API rejected unauthenticated requests with 401 and cross-origin requests with 403. Protected-action and transaction counts were identical before and after these requests; see `docs/evidence/approval-denials.json`. Cancellation, expiry, stale authentication, subject mismatch, replay and failed proof validation passed local tests. This HTTP check does not replace the still-unrecorded browser cancellation journey.
+
+The official error definition for `world_id_4_not_available` is an unavailable World ID 4.0 credential for the user. Session proofs need World ID 4.0, so a successful earlier birth (which can use legacy fallback) is not proof of Session support. [Error reference](https://docs.world.org/world-id/idkit/error-codes), [Session reference](https://docs.world.org/world-id/idkit/session-proofs). The backend still has zero accepted production human sessions. No production identity was fabricated or replaced with a Sandbox identity.
+
+The verifier now requires `success: true` and successful results for all requested credentials; a 200 partial-success response alone is insufficient. The original proof payload is forwarded unchanged. This hardening is committed and tested, but its deployment is not yet verified. It does not resolve the phone's missing-credential condition.
