@@ -7,6 +7,7 @@ Paste-ready English for the Hacker Dashboard. Updated 2026-09-27 JST.
 **Category:** Artificial Intelligence
 **Repository:** https://github.com/bw-bit/otomo
 **Live demo:** https://otomo-world-id.vercel.app
+**Demo video:** https://youtu.be/V3a9aSsW8gQ (3:37, creator's Japanese voice, English subtitles)
 **Prizes:** World — Best Use of IDKit · World — Best Use of World ID for Agents · ENS — Best Use of ENSv2 · 1inch — Build an Aqua App
 
 ## The problem
