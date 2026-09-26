@@ -79,6 +79,7 @@ export const UI_STRINGS = {
   authPrepareFailed: { en: "Couldn't prepare verification. Please try again.", ja: "認証の準備に接続できませんでした。もう一度お試しください", zh: "无法准备身份验证，请重试。", ko: "인증을 준비하지 못했습니다. 다시 시도해 주세요." },
   birthFailed: { en: "Couldn't create your companion.", ja: "誕生に失敗しました", zh: "无法创建伙伴。", ko: "파트너를 만들지 못했습니다." },
   worldIdFailed: { en: "World ID verification couldn't be completed (code: {code}).", ja: "World IDの確認を完了できませんでした（code: {code}）", zh: "World ID 验证未能完成（代码：{code}）。", ko: "World ID 인증을 완료하지 못했습니다(코드: {code})." },
+  worldIdAlreadyHasCompanions: { en: "This World ID already has companions. Sign in to welcome a sibling.", ja: "この World ID にはすでに相棒がいます。サインインして仲間を迎えてください。", zh: "这个 World ID 已经有伙伴了。请登录迎接新伙伴。", ko: "이 World ID에는 이미 파트너가 있습니다. 로그인하여 새 파트너를 맞이하세요." },
 
   moodLabel: { en: "Mood from ENS", ja: "ENS から読んだ気分", zh: "从 ENS 读取的心情", ko: "ENS에서 읽은 기분" },
   resolveTo: { en: "Resolves to", ja: "解決先", zh: "解析到", ko: "리졸브 대상" },

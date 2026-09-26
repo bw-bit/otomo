@@ -40,6 +40,7 @@ export default function BirthPage() {
   const [mode, setMode] = useState<"birth" | "login">("birth");
   const [reservedLabel, setReservedLabel] = useState<string | null>(null);
   const [born, setBorn] = useState<Born | null>(null);
+  const [worldIdDuplicate, setWorldIdDuplicate] = useState(false);
   const [verifiedCompanion, setVerifiedCompanion] = useState<string | null>(null);
   const [birthStage, setBirthStage] = useState("preparing");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -112,6 +113,7 @@ export default function BirthPage() {
 
   const start = async () => {
     setError(null);
+    setWorldIdDuplicate(false);
     if (mode === "birth" && verifiedCompanion) {
       try { await submitBirth(undefined, true); }
       catch { fail(t("addCompanionConnectionFailed", lang)); }
@@ -156,6 +158,7 @@ export default function BirthPage() {
     }
     setMode("login");
     setError(null);
+    setWorldIdDuplicate(false);
   };
 
   const validLabel = LABEL_RE.test(label);
@@ -227,7 +230,7 @@ export default function BirthPage() {
               </div>
               {error && (
                 <div>
-                  <p className="ng">{t("signupError", lang)}</p>
+                  <p className="ng">{worldIdDuplicate ? t("worldIdAlreadyHasCompanions", lang) : t("signupError", lang)}</p>
                   <details className="plain"><summary>{t("details", lang)}</summary><p className="mono">{error}</p></details>
                 </div>
               )}
@@ -259,7 +262,7 @@ export default function BirthPage() {
               )}
               {reservedLabel && <Link href={`/otomo/${reservedLabel}`}>{t("savedCompanionStatus", lang)}</Link>}
               <p className="small" style={{ marginTop: 18 }}>
-                <button className="linklike" onClick={() => { setMode("birth"); setError(null); }}>{t("createNew", lang)}</button>
+                <button className="linklike" onClick={() => { setMode("birth"); setError(null); setWorldIdDuplicate(false); }}>{t("createNew", lang)}</button>
               </p>
             </>
           )
@@ -300,7 +303,11 @@ export default function BirthPage() {
           onError={(code, report) => {
             console.error("[idkit] error", code, report);
             setOpen(false);
-            if (code === IDKitErrorCodes.FailedByHostApp) {
+            if (code === IDKitErrorCodes.NullifierReplayed) {
+              setWorldIdDuplicate(true);
+              setError(t("worldIdFailed", lang, { code }));
+              setPhase("idle");
+            } else if (code === IDKitErrorCodes.FailedByHostApp) {
               setError((previous) => previous ?? t("worldIdFailed", lang, { code }));
             } else {
               fail(t("worldIdFailed", lang, { code }));
