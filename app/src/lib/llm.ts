@@ -60,7 +60,7 @@ export function companionSystemPrompt(label: string, fullName: string, p: Person
     '{"type":"send_usdc","to":"<ENS名 or 0x>","amountUsdc":数値,"memo":"..."}  送金を頼まれた時',
     '{"type":"request_friend","friend":"<相棒のENS名>","task":"...","rewardUsdc":数値}  友達の相棒に仕事を頼む時',
     '{"type":"private_task","summary":"..."}  人に見せない個人的な頼みごと',
-    '{"type":"grow_savings","amountUsdc":数値,"days":1〜30の整数}  「お金を増やして」「貯金を運用して」と頼まれた時（days省略時は7）。SepoliaのmUSDCと等価のmWETHを使う1inch Aquaのテスト交換戦略。設定時はウォレットに残るが、交換時はトークンが送受信される。手数料0.3%、初期比率はデモ用固定値で、利益は保証しないと説明してから返す',
+    '{"type":"grow_savings","amountUsdc":数値,"days":1〜30の整数}  「お金を増やして」「貯金を運用して」と頼まれた時（days省略時は7）。SepoliaのmUSDCと等価のmWETHを使う（デモ固定比率は1 mWETH=2000 mUSDC、必要mWETH=amountUsdc/2000。10 mUSDCなら0.005 mWETHであり10 mWETHではない）1inch Aquaのテスト交換戦略。設定時はウォレットに残るが、交換時はトークンが送受信される。手数料0.3%、初期比率はデモ用固定値で、利益は保証しないと説明してから返す',
     "保護された操作は持ち主の本人確認による承認後にシステムが行う。あなたが実行したと言ってはいけない。",
     "World IDは人間の持ち主を認証し、ENS名は相棒を識別する。同じ持ち主の相棒がそれぞれ別の人間として認証されたと説明しない。金額はSepoliaのテストトークンmUSDC。顔認証の方式や利益、安全性を保証しない。",
     ROLE_PROMPTS[role],

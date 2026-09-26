@@ -12,6 +12,7 @@ export interface PendingIntent {
   days?: number;
   summary?: string;
   mood?: string;
+  operation?: string;
 }
 
 /** One friendly sentence describing what a pending action will do. */
@@ -32,6 +33,17 @@ export function intentPlainText(intent: PendingIntent, lang: Lang): string {
       return t("plainSavings", lang, { amount: intent.amountUsdc ?? "?" });
     case "private_task":
       return t("plainPrivate", lang, { summary: intent.summary ?? "" });
+    case "strategy_operation": {
+      const labels = {
+        ja: { ship: "1inch Aquaの交換受付を開始していい？", demo_swap: "別のデモエージェントとテストトークンを交換していい？", dock: "1inch Aquaの交換受付を停止していい？" },
+        en: { ship: "Start this 1inch Aqua strategy?", demo_swap: "Exchange test tokens with the demo agent?", dock: "Stop this 1inch Aqua strategy?" },
+        zh: { ship: "开始此1inch Aqua策略？", demo_swap: "与演示代理交换测试代币？", dock: "停止此1inch Aqua策略？" },
+        ko: { ship: "1inch Aqua 전략을 시작할까요?", demo_swap: "데모 에이전트와 테스트 토큰을 교환할까요?", dock: "1inch Aqua 전략을 중지할까요?" },
+      };
+      return labels[lang][intent.operation as "ship" | "dock" | "demo_swap"] ?? t("plainUnknown",lang);
+    }
+    case "publish_reputation":
+      return { ja: "相棒の活動実績をENSで公開していい？", en: "Publish this companion's activity to ENS?", zh: "将搭档活动公开到ENS？", ko: "파트너 활동을 ENS에 공개할까요?" }[lang];
     case "update_mood":
       return t("plainMood", lang);
     default:

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LANG_LOCALES, t, type Lang } from "@/lib/i18n";
+import { DEMO_COPY } from "@/lib/demo-copy";
 import { ProfileDisclosure } from "./ProfileDisclosure";
 import type { ReputationSnapshot } from "@/lib/reputation";
 
@@ -72,6 +73,7 @@ export function ReputationCard({ snapshot, managed, preview = false, lang = "en"
       : shown.verification.approvalIssuer === "unknown"
         ? t("unverified", lang)
         : shown.verification.approvalIssuer}</p>
+    <p className="small">{DEMO_COPY[lang].counts}</p>
     <dl className="profile-metrics">
       {counts.map(([label, value]) => <div key={label}>
         <dt>{label}</dt>
@@ -86,7 +88,7 @@ export function ReputationCard({ snapshot, managed, preview = false, lang = "en"
     </p>}
     {publication && <button className="ghost" onClick={recheck} disabled={busy}>{t("recheckEns", lang)}</button>}
     {publication?.status === "verified" && <a href={`/profile/${snapshot.name.split(".")[0]}`}>{t("viewPublicProfile", lang)}</a>}
-    <ProfileDisclosure lang={lang} />
+    <details className="plain" open={Boolean(approval)}><summary>{DEMO_COPY[lang].technical}</summary><ProfileDisclosure lang={lang} /></details>
     {managed && !approval && <button onClick={prepare} disabled={busy}>
       {busy ? t("preparing", lang) : t("reviewPublishContent", lang)}
     </button>}

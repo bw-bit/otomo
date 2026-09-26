@@ -290,7 +290,7 @@ export async function fundDemoStrategy(db: Db, label: string, row: Strategy): Pr
       client.readContract({ address: usdc, abi: erc20Abi, functionName: "balanceOf", args: [account] }),
       client.readContract({ address: weth, abi: erc20Abi, functionName: "balanceOf", args: [account] }),
     ]);
-    if (!usdcCode || !wethCode || usdcDecimals !== USDC_DECIMALS || usdcSymbol !== "mUSDC" || wethDecimals !== WETH_DECIMALS || wethSymbol !== "mWETH") {
+    if (!usdcCode || !wethCode || usdcDecimals !== USDC_DECIMALS || usdcSymbol !== "USDC" || wethDecimals !== WETH_DECIMALS || wethSymbol !== "mWETH") {
       throw new Error("Fixed Sepolia demo token contracts failed code, symbol, or decimals checks");
     }
 

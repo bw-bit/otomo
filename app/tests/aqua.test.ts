@@ -120,7 +120,7 @@ describe("Aqua transaction boundaries", () => {
     const balances = new Map<string, bigint>([[USDC.toLowerCase(), 3_000_000n], [WETH.toLowerCase(), 2_000_000_000_000_000n]]);
     mocks.readContract.mockImplementation(async ({ address, functionName, args }: any) => {
       if (functionName === "decimals") return address.toLowerCase() === USDC.toLowerCase() ? 6 : 18;
-      if (functionName === "symbol") return address.toLowerCase() === USDC.toLowerCase() ? "mUSDC" : "mWETH";
+      if (functionName === "symbol") return address.toLowerCase() === USDC.toLowerCase() ? "USDC" : "mWETH";
       if (functionName === "balanceOf") return balances.get(address.toLowerCase()) ?? 0n;
       throw new Error(`unexpected read ${functionName}`);
     });
@@ -175,7 +175,7 @@ describe("Aqua transaction boundaries", () => {
     mocks.companionWallet.mockResolvedValueOnce({ account: { address: OTHER }, writeContract: mocks.writeContract });
     mocks.readContract.mockImplementation(async ({ functionName, address }: any) => functionName === "decimals"
       ? address.toLowerCase() === USDC.toLowerCase() ? 6 : 18
-      : functionName === "symbol" ? address.toLowerCase() === USDC.toLowerCase() ? "mUSDC" : "mWETH" : 0n);
+      : functionName === "symbol" ? address.toLowerCase() === USDC.toLowerCase() ? "USDC" : "mWETH" : 0n);
     await expect(fundDemoStrategy({} as never, "sora", ready)).rejects.toThrow("Companion wallet does not own this strategy");
 
     await expect(fundDemoStrategy({} as never, "sora", { ...ready, usdc_amount: 20.000001, weth_amount: 0.0100000005 }))

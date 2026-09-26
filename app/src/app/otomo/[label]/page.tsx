@@ -7,7 +7,10 @@ import { useAccount, useConnect, usePublicClient, useWriteContract } from "wagmi
 import { LanguageSelect } from "@/components/LanguageSelect";
 import { AQUA_COPY } from "@/lib/aqua-copy";
 import { ROOM_COPY } from "@/lib/room-copy";
-import { WorkDelivery } from "@/components/WorkDelivery";
+import { DemoWorkCard } from "@/components/DemoWorkCard";
+import { DEMO_COPY } from "@/lib/demo-copy";
+import { readDisplayIntent, rewardPaid } from "@/lib/demo-view";
+import "./demo.css";
 import { ReputationCard } from "@/components/ReputationCard";
 import { LiveTalk } from "@/components/LiveTalk";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -68,6 +71,8 @@ export default function CompanionPage() {
   const { lang, setLang } = useLanguage();
   const roomCopy = ROOM_COPY[lang];
   const aquaCopy = AQUA_COPY[lang];
+  const demoCopy = DEMO_COPY[lang];
+  const [view, setView] = useState<"talk" | "work" | "aqua">("talk");
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [speaking, setSpeaking] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -201,7 +206,7 @@ export default function CompanionPage() {
       if (companion.status === "rejected") throw companion.reason;
       const b = companion.value;
       setS(b); setError(null);
-      if (strategies.status === "fulfilled") setStrat(strategies.value);
+      setStrat(strategies.status === "fulfilled" ? strategies.value : null);
       if (household.status === "fulfilled" && household.value) setMine(household.value.companions ?? []);
       if (peers.status === "fulfilled" && peers.value) setNetwork(peers.value.companions ?? []);
       const last = b.messages.at(-1);
@@ -224,7 +229,7 @@ export default function CompanionPage() {
       prevMsgCount.current = -1;
       if (!await load()) { window.location.assign(`/otomo/${to}`); return; }
       window.history.replaceState(window.history.state, "", `/otomo/${to}`);
-      setInput(""); setNote(null); setMenuOpen(false);
+      setInput(""); setNote(null); setMenuOpen(false); setDetailsOpen(false);
     } catch (e) { setError(e instanceof Error ? e.message : t("switchFailed", langRef.current)); }
     finally { switchLock.current = false; setSwitching(false); }
   };
@@ -236,7 +241,7 @@ export default function CompanionPage() {
     void ensureTranslations(s.messages.filter((message) => message.role === "assistant").map((message) => message.content), lang);
   }, [s, lang, ensureTranslations]);
 
-  useEffect(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, [s?.label, s?.messages.length]);
+  useEffect(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, [s?.label, s?.messages.length, view]);
 
   const authResult = params.get("auth");
   const authReason = params.get("reason");
@@ -303,7 +308,8 @@ export default function CompanionPage() {
   };
 
   const prepareStrategy = async (st: StrategyRow, operation: "ship" | "dock" | "demo_swap") => {
-    setBusy(true);
+    if (busy || switchLock.current) return;
+    setBusy(true); setError(null);
     try { await postStrategy(st.id, { event: "prepare", operation }); await load(); setNote(t("operationQueued", langRef.current)); }
     catch (e) { setError(e instanceof Error ? e.message : t("operationPrepareFailed", langRef.current)); }
     finally { setBusy(false); }
@@ -374,8 +380,8 @@ export default function CompanionPage() {
     }
   };
 
-  if (error && !s) return <main className="stage"><section className="panel"><p className="ng">{error}</p></section></main>;
-  if (!s) return <main className="stage"><section className="panel"><p>{t("loading", lang)}</p></section></main>;
+  if (error && !s) return <main className="demo-loading"><section className="panel"><p className="ng">{error}</p></section></main>;
+  if (!s) return <main className="demo-loading" role="status"><section className="panel"><p>{t("loading", lang)}</p></section></main>;
 
   const pending = s.actions.filter((a) => a.status === "pending" && a.expires_at > Date.now());
   const roomCompanions = (mine.length ? mine : [{ label: s.label, full_name: s.fullName, role: s.role }]).map((m) => ({ label: m.label, full_name: m.full_name, role: m.role }));
@@ -389,51 +395,92 @@ export default function CompanionPage() {
   const openDetails = () => {
     setMenuOpen(false);
     setDetailsOpen(true);
-    setTimeout(() => detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), 50);
+    setTimeout(() => detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
 
-  return (
-    <main className="stage" style={{ gridTemplateRows: "var(--room-height) auto" }}>
-      <CompanionRoom
-        className="roomscene"
-        companions={roomCompanions}
-        current={s.label}
-        onSelect={switchTo}
-        bubble={roomBubble}
-        thinking={busy}
-        lang={lang}
-      />
-      {switching && <div className="room-progress" role="status">{roomCopy.switching}</div>}
-      {mine.length < 3 && <a className="plusbtn" href="/" aria-label={t("newCompanion", lang)} style={{ top: "calc(var(--room-height) - 66px)" }}>＋</a>}
-      <div className="menuwrap">
-        <button className="menubtn" aria-label={t("menu", lang)} aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>≡</button>
-        {menuOpen && (
-          <div className="menupop">
-            <LanguageSelect lang={lang} setLang={setLang} />
-            <button className="ghost small" onClick={openDetails}>{roomCopy.details}</button>
-            <a href={`/profile/${s.label}`}><button className="ghost small" style={{ width: "100%" }}>{t("publicProfile", lang)}</button></a>
-            <button className="ghost small" onClick={async () => { await fetch("/api/logout", { method: "POST" }); window.location.href = "/"; }}>{t("logout", lang)}</button>
-          </div>
-        )}
-      </div>
-      <div />
-      <section className="panel" inert={switching}>
-        <div className="room-toolbar"><h1>{s.label} <small className="small">· {t(s.role === "personal" ? "roleTagPersonal" : "roleTagWork", lang)}</small></h1>
-        <button className="audio-toggle" aria-pressed={autoSpeak} title={roomCopy.voiceHint} onClick={() => {
-          const next = !autoSpeak; setAutoSpeak(next); autoSpeakRef.current = next;
-          try { localStorage.setItem("otomo.autospeak", next ? "1" : "0"); } catch { /* Toggle works without persistence. */ }
-          if (!next) { speechVersion.current++; audioRef.current?.pause(); setSpeaking(null); }
-        }}>{autoSpeak ? "🔊" : "🔇"} {autoSpeak ? roomCopy.voiceOn : roomCopy.voiceOff}</button></div>
-        {s.provisioning && s.provisioning.status !== "ready" && <p className="ng">{t("provisioningStatus", lang, { status: birthStageText(s.provisioning.status, lang) })}</p>}
-        {authResult === "ok" && <p>{t("approved", lang)}</p>}
-        {authResult === "ng" && <p className="ng">{t("rejected", lang)}: {authReason}</p>}
-        {!s.bound && (
-          <div className="card">
-            <p>{t("bindIntro", lang)}</p>
-            <a href="/api/auth/start?kind=bind"><button>{t("bindingAction", lang)}</button></a>
-          </div>
-        )}
 
+  const primeChat = (text: string) => {
+    setView("talk"); setInput(text);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+  const allJobs = [...s.outbox, ...(s.role === "work" ? s.inbox : [])];
+  const activeJobs = allJobs.filter(r => !rewardPaid(r));
+  const paidJobs = allJobs.filter(rewardPaid);
+  const activeStrategies = strat?.strategies.filter(st => st.status !== "docked") ?? [];
+  const stoppedStrategies = strat?.strategies.filter(st => st.status === "docked") ?? [];
+  const currentWallet = strat?.strategies.find(st => st.wallet)?.wallet;
+  const approvalIssuer = s.reputation.verification.approvalIssuer;
+  const approvalLabel = approvalIssuer.includes("sandbox") ? demoCopy.sandbox : approvalIssuer === "https://developer.world.org" ? demoCopy.production : demoCopy.unknown;
+  const showStrategy = (st: StrategyRow) => <article className="demo-strategy" key={st.id}>
+    <div className="demo-job-heading"><strong>{st.usdc_amount} mUSDC + {st.weth_amount} mWETH</strong><span className="demo-status">{st.status === "ready" ? demoCopy.ready : st.status === "shipped" ? demoCopy.active : demoCopy.stopped}</span></div>
+    <p className="small">{demoCopy.deadline}: {new Date(st.deadline * 1000).toLocaleString(LANG_LOCALES[lang])} · 0.3%</p>
+    {st.paramsError && <p className="ng" role="alert">{st.paramsError}</p>}
+    {st.status === "ready" && st.funding && !st.funding.ready && <div>
+      <p>{aquaCopy.missing}: {st.funding.missing.usdc.toFixed(6)} mUSDC / {st.funding.missing.weth.toFixed(6)} mWETH</p>
+      {s.managed && <button className="ghost" disabled={busy} onClick={async () => {
+        setBusy(true); setError(null);
+        try { await postStrategy(st.id, { event: "fund_demo" }); await load(); setNote(aquaCopy.funded); }
+        catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+        finally { setBusy(false); }
+      }}>{aquaCopy.fund}</button>}
+    </div>}
+    {st.status === "ready" && st.ship && ((s.managed || isConnected)
+      ? <button onClick={() => ship(st)} disabled={busy || st.funding?.ready === false}>{busy ? "…" : demoCopy.approve}</button>
+      : <button onClick={() => connectors[0] && connectAsync({ connector: connectors[0] })} disabled={isConnecting}>{isConnecting ? t("walletWait",lang) : t("connectWallet",lang)}</button>)}
+    {st.status === "shipped" && <>
+      <div className="demo-balance"><span>{aquaCopy.virtual}</span><strong>{st.virtual ? `${st.virtual.usdc} mUSDC / ${st.virtual.weth} mWETH` : "…"}</strong></div>
+      <div className="row"><button onClick={() => demoSwap(st)} disabled={busy}>{demoCopy.swap}</button><button className="ghost" onClick={() => dock(st)} disabled={busy || (!s.managed && !isConnected)}>{demoCopy.stop}</button></div>
+    </>}
+    {st.status === "docked" && <p>{aquaCopy.stopped}</p>}
+    {(st.ship_tx || st.dock_tx) && <div className="demo-receipts">
+      {st.ship_tx && <a href={`https://sepolia.etherscan.io/tx/${st.ship_tx}`} target="_blank" rel="noreferrer">{t("shipTx",lang)} ↗</a>}
+      {st.dock_tx && <a href={`https://sepolia.etherscan.io/tx/${st.dock_tx}`} target="_blank" rel="noreferrer">{t("dockTx",lang)} ↗</a>}
+    </div>}
+  </article>;
+
+  return <main className="stage demo-page">
+    <div className="demo-shell">
+      <aside className="demo-room">
+        <header className="demo-brand"><a href="/">Otomo<span> / companion</span></a><LanguageSelect lang={lang} setLang={setLang} /></header>
+        <div className="demo-intro"><p>{demoCopy.subtitle}</p><h1>{demoCopy.title}</h1></div>
+        <div className="demo-scene-wrap"><CompanionRoom className="roomscene" companions={roomCompanions} current={s.label} onSelect={switchTo} bubble={view === "talk" ? roomBubble : undefined} thinking={busy} lang={lang} /></div>
+        <nav className="demo-companions" aria-label={demoCopy.switcher}>
+          {roomCompanions.map(c => <button key={c.label} aria-pressed={c.label === s.label} disabled={busy || switching} onClick={() => void switchTo(c.label)}>{c.label}<span>{t(c.role === "work" ? "roleTagWork" : "roleTagPersonal",lang)}</span></button>)}
+          {mine.length < 3 && <a className="demo-add" href="/" aria-label={t("newCompanion",lang)}>＋</a>}
+        </nav>
+        <div className="demo-room-footer"><span>{s.fullName}</span><button className="linklike" onClick={openDetails}>{demoCopy.details} ↗</button></div>
+      </aside>
+      <section className="panel demo-panel" inert={switching}>
+        <header className="room-toolbar"><div><span className="demo-eyebrow">{t(s.role === "personal" ? "roleTagPersonal" : "roleTagWork",lang)}</span><h2>{s.label}</h2></div>
+          <div className="demo-tools"><button className="audio-toggle" aria-pressed={autoSpeak} title={roomCopy.voiceHint} onClick={() => {
+            const next = !autoSpeak; setAutoSpeak(next); autoSpeakRef.current = next;
+            try { localStorage.setItem("otomo.autospeak",next ? "1" : "0"); } catch { /* Optional persistence. */ }
+            if (!next) { speechVersion.current++; audioRef.current?.pause(); setSpeaking(null); }
+          }}>{autoSpeak ? "🔊" : "🔇"} {autoSpeak ? roomCopy.voiceOn : roomCopy.voiceOff}</button>
+          <button className="menubtn" aria-label={t("menu",lang)} aria-expanded={menuOpen} onClick={() => setMenuOpen(o => !o)}>≡</button></div>
+        </header>
+        {menuOpen && <div className="demo-menu"><button className="ghost" onClick={openDetails}>{demoCopy.details}</button><a href={`/profile/${s.label}`}>{t("publicProfile",lang)}</a><button className="ghost" onClick={async () => { await fetch("/api/logout",{method:"POST"}); window.location.href="/"; }}>{t("logout",lang)}</button></div>}
+        <p className="demo-environment"><span>{demoCopy.environment}</span><span>{approvalLabel}</span></p>
+        {s.provisioning && s.provisioning.status !== "ready" && <p className="ng">{t("provisioningStatus",lang,{status:birthStageText(s.provisioning.status,lang)})}</p>}
+        {authResult === "ok" && <p role="status">{t("approved",lang)}</p>}
+        {authResult === "ng" && <p className="ng" role="alert">{t("rejected",lang)}: {authReason}</p>}
+        {!s.bound && <div className="card"><p>{t("bindIntro",lang)}</p><a href="/api/auth/start?kind=bind">{t("bindingAction",lang)} →</a></div>}
+        <nav className="demo-tabs" aria-label={demoCopy.navigation}>
+          {(["talk","work","aqua"] as const).map(key => <button key={key} aria-pressed={view === key} onClick={() => { setView(key); if (key !== "talk") void load(); }}>{demoCopy[key]}{key === "work" && activeJobs.length > 0 && <span className="demo-count">{activeJobs.length}</span>}</button>)}
+        </nav>
+        {note && <p className="demo-notice" role="status">{note}</p>}
+        {error && <p className="ng" role="alert">{error}</p>}
+        {pending.length > 0 && <section className="demo-approvals" aria-label={demoCopy.next}><h3>{demoCopy.next}</h3><p>{demoCopy.approvalHint}</p>{pending.map(a => {
+          const intent = readDisplayIntent(a.intent);
+          return <div className="demo-approval" key={a.id}><p><strong>{intent ? intentPlainText(intent,lang) : demoCopy.invalid}</strong></p>
+            {intent && s.bound && <a className="demo-primary-link" href={`/api/auth/start?kind=approve&action=${a.id}`}>{t("pendingApproval",lang)} →</a>}
+            <details className="plain"><summary>{demoCopy.technical}</summary><p className="mono">{a.intent}</p></details>
+          </div>;
+        })}</section>}
+        <section hidden={view !== "talk"} aria-label={demoCopy.talk}>
+          <div className="demo-prompts"><button className="ghost small" disabled={busy} onClick={() => primeChat(demoCopy.explainPrompt)}>{demoCopy.explain}</button>
+            {s.role === "personal" && network.some(p => p.role === "work" && p.label !== s.label) && <button className="ghost small" disabled={busy} onClick={() => { const peer=network.find(p => p.role === "work" && p.label !== s.label)!; primeChat(roomCopy.demoPrompt.replace("{name}",peer.full_name)); }}>{roomCopy.demo}</button>}
+          </div>
         <div className="chat" ref={chatRef}>
           {s.messages.map((m, i) => {
             if (m.role !== "assistant") return <div key={i} className="msg user">{m.content}</div>;
@@ -467,146 +514,38 @@ export default function CompanionPage() {
           <LiveTalk label={s.label} lang={lang} compact />
           <button className="composer-send" onClick={send} disabled={busy}>{busy ? "…" : t("send", lang)}</button>
         </div>
-        {note && <p>{note}</p>}
-        {error && <p className="ng">{error}</p>}
 
-        {pending.map((a) => {
-          const intent = JSON.parse(a.intent);
-          return (
-            <div className="card" key={a.id}>
-              <p><b>{intentPlainText(intent, lang)}</b></p>
-              <a href={`/api/auth/start?kind=approve&action=${a.id}`}><button disabled={!s.bound}>{t("pendingApproval", lang)}</button></a>
-              <details className="plain"><summary>{t("details", lang)}</summary><p className="mono">{JSON.stringify(intent)}</p></details>
-            </div>
-          );
-        })}
-
-        {s.role === "personal" && strat?.env && <section className="card aqua-intro">
-          <h2>{aquaCopy.title}</h2><p>{aquaCopy.intro}</p><p className="small">{aquaCopy.facts}</p>
-          {!strat.strategies.some(st => st.status !== "docked") && <button className="ghost small" onClick={() => { setInput(aquaCopy.prompt); inputRef.current?.focus(); }}>{aquaCopy.prepare}</button>}
-        </section>}
-        {(strat?.strategies.length ?? 0) > 0 && (
-          <>
-            <h1 style={{ fontSize: 16, marginTop: 16 }}>{t("savings", lang)}</h1>
-            {strat!.strategies.map((st) => (
-              <div className="card" key={st.id}>
-                <p>
-                  <b>{t("strategyAmounts", lang, { usdc: st.usdc_amount, weth: st.weth_amount })}</b>{" "}
-                  {t("strategyDesc", lang, { deadline: new Date(st.deadline * 1000).toLocaleString(LANG_LOCALES[lang]) })}
-                </p>
-                {st.paramsError && <p className="ng">{st.paramsError}</p>}
-                {st.status === "ready" && st.funding && !st.funding.ready && <div>
-                  <p>{aquaCopy.missing}: {st.funding.missing.usdc.toFixed(6)} mUSDC / {st.funding.missing.weth.toFixed(6)} mWETH</p>
-                  {s.managed && <button className="ghost small" disabled={busy} onClick={async () => {
-                    setBusy(true); setError(null);
-                    try { await postStrategy(st.id, { event: "fund_demo" }); await load(); setNote(aquaCopy.funded); }
-                    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-                    finally { setBusy(false); }
-                  }}>{aquaCopy.fund}</button>}
-                </div>}
-                {st.status === "ready" && st.ship && (
-                  (s.managed || isConnected) ? (
-                    <button onClick={() => ship(st)} disabled={busy || st.funding?.ready === false}>{busy ? "…" : t("ship", lang)}</button>
-                  ) : (
-                    <button onClick={() => connectors[0] && connectAsync({ connector: connectors[0] })} disabled={isConnecting}>
-                      {isConnecting ? t("walletWait", lang) : t("connectWallet", lang)}
-                    </button>
-                  )
-                )}
-                {st.status === "shipped" && (
-                  <>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      <div>
-                        <p style={{ margin: 0 }}>{aquaCopy.wallet}</p>
-                        <p className="mono" style={{ margin: 0 }}>{st.wallet ? `${st.wallet.usdc} USDC / ${st.wallet.weth} mWETH` : "…"}</p>
-                      </div>
-                      <div>
-                        <p style={{ margin: 0 }}>{aquaCopy.virtual}</p>
-                        <p className="mono" style={{ margin: 0 }}>{st.virtual ? `${st.virtual.usdc} USDC / ${st.virtual.weth} mWETH` : "…"}</p>
-                      </div>
-                    </div>
-                    <p>{s.managed ? t("managedWalletDescription", lang) : t("nonCustodial", lang)}</p>
-                    <div className="row">
-                      <button className="ghost" onClick={() => demoSwap(st)} disabled={busy}>{t("demoSwap", lang)}</button>
-                      <button className="ghost" onClick={() => dock(st)} disabled={busy || (!s.managed && !isConnected)}>{t("dock", lang)}</button>
-                    </div>
-                  </>
-                )}
-                {st.status === "docked" && <><p>{aquaCopy.stopped}</p>{st.wallet && <p className="mono">{aquaCopy.wallet}: {st.wallet.usdc} mUSDC / {st.wallet.weth} mWETH</p>}</>}
-              </div>
-            ))}
-          </>
-        )}
-
-        {s.inbox.length > 0 && s.role === "work" && <h1 style={{ fontSize: 16, marginTop: 16 }}>{t("workRequests", lang)}</h1>}
-        {s.role === "work" && s.inbox.map((r) => (
-          <div className="card" key={r.id}>
-            <p><b>{r.from_label} → {s.label}</b> · {r.reward_usdc} mUSDC · {requestStatusText(r.status, lang)}</p><details className="plain"><summary>{roomCopy.brief}</summary><p>{r.task}</p></details>
-            {r.status === "open" && <button disabled={busy} onClick={() => updateReq(r.id, "accepted")}>{t("acceptRequest", lang)}</button>}
-            {r.status === "accepted" && <button disabled={busy} onClick={() => updateReq(r.id, "delivered")}>{t("deliverRequest", lang)}</button>}
-            {r.status === "working" && <div><p>{t("workInProgress", lang)}</p><button disabled={busy} onClick={() => updateReq(r.id, "delivered")}>{t("retryDelivery", lang)}</button></div>}
-            {r.content && <WorkDelivery content={r.content} title={roomCopy.delivery} /> }
-            {r.reward_action_id && <p className="small">{r.reward_status === "executed" && !r.reward_reason && r.reward_tx_hash ? roomCopy.rewardPaid : r.reward_status === "pending" ? (Number(r.reward_expires_at) < Date.now() ? roomCopy.expiredReward : roomCopy.rewardPending) : roomCopy.rewardFailed}</p>}
-          </div>
-        ))}
-
-        {s.outbox.map(r => <div className="card" key={r.id}>
-          <p><b>{s.label} → {r.to_label}</b> · {r.reward_usdc} mUSDC · {requestStatusText(r.status, lang)}</p><details className="plain"><summary>{roomCopy.brief}</summary><p>{r.task}</p></details>
-          {r.content && <WorkDelivery content={r.content} title={roomCopy.delivery} /> }
-          {r.status === "delivered" && <button disabled={busy} onClick={() => updateReq(r.id, "done")}>{t("receiveDelivery", lang)}</button>}
-          {r.reward_action_id && !r.reward_tx_hash && (r.reward_status === "expired" || r.reward_status === "rejected" || (r.reward_status === "pending" && Number(r.reward_expires_at) < Date.now())) && <button className="ghost small" disabled={busy} onClick={() => updateReq(r.id, "renew_reward")}>{roomCopy.renewReward}</button>}
-          {r.reward_action_id && <p className="small">{r.reward_status === "executed" && !r.reward_reason && r.reward_tx_hash ? roomCopy.rewardPaid : r.reward_status === "pending" ? (Number(r.reward_expires_at) < Date.now() ? roomCopy.expiredReward : roomCopy.rewardPending) : roomCopy.rewardFailed}</p>}
-        </div>)}
-
-        {s.role === "personal" && network.some(p => p.role === "work" && p.label !== s.label) && <div className="card">
-          <button className="ghost small" onClick={() => { const peer = network.find(p => p.role === "work" && p.label !== s.label)!; setInput(roomCopy.demoPrompt.replace("{name}", peer.full_name)); inputRef.current?.focus(); }}>{roomCopy.demo}</button>
-          <p className="small">{roomCopy.demoHint}</p>
-        </div>}
-        {network.some((p) => p.role === "work" && p.label !== s.label) && (
-          <div className="card">
-            <p><b>{t("workCompanions", lang)}</b></p>
-            {network.filter((p) => p.role === "work" && p.label !== s.label).map((p) => (
-              <p key={p.label}>
-                {p.full_name}{p.skills?.length ? ` · ${p.skills.join("、")}` : ""}{" "}
-                <button className="small" onClick={() => { setInput(t("companionMention", lang, { name: p.full_name })); inputRef.current?.focus(); }}>{t("askThisCompanion", lang)}</button>
-              </p>
-            ))}
-          </div>
-        )}
-
-        {!s.managed && <div className="card">
-          <p>{t("allowanceInfo", lang, { amount: s.allowanceUsdc })}</p>
-          <div className="row">
-            <input value={cap} onChange={(e) => setCap(e.target.value.replace(/[^0-9.]/g, ""))} />
-            <button className="ghost" onClick={approveCap}>{t("setCap", lang)}</button>
-            <button className="ghost" onClick={mintTestUsdc} disabled={!address}>{t("mint", lang)}</button>
-          </div>
-        </div>}
-
-        <details className="plain details-entry" open={detailsOpen} onToggle={(e) => setDetailsOpen((e.target as HTMLDetailsElement).open)} ref={(el) => { detailsRef.current = el; }}>
-          <summary>{roomCopy.details}</summary>
-          <p>{roomCopy.detailsHint}</p>
-          <p className="small">
-            ENS: {s.fullName}
-            <br />{t("moodLabel", lang)}: <b>{s.ens.mood ?? t("unset", lang)}</b>
-            <br />{t("resolveTo", lang)}: <span className="mono">{s.ens.address ?? t("unresolved", lang)}</span>
-          </p>
+        </section>
+        <section hidden={view !== "work"} aria-label={demoCopy.work}>
+          <div className="demo-section-heading"><div><h3>{demoCopy.workTitle}</h3><p>{s.role === "work" ? demoCopy.workerHint : demoCopy.workHint}</p></div><button className="linklike" disabled={busy} onClick={() => void load()}>{demoCopy.refresh}</button></div>
+          {allJobs.length === 0 && <p className="demo-empty">{s.role === "work" ? demoCopy.noIncoming : demoCopy.noWork}</p>}
+          {activeJobs.map(r => <DemoWorkCard key={r.id} request={r} label={s.label} busy={busy} lang={lang} onUpdate={updateReq} />)}
+          {paidJobs.slice(0,1).map(r => <DemoWorkCard key={r.id} request={r} label={s.label} busy={busy} lang={lang} onUpdate={updateReq} />)}
+          {paidJobs.length > 1 && <details className="plain demo-history"><summary>{demoCopy.history} ({paidJobs.length - 1})</summary>{paidJobs.slice(1).map(r => <DemoWorkCard key={r.id} request={r} label={s.label} busy={busy} lang={lang} onUpdate={updateReq} />)}</details>}
+          {s.role === "personal" && <details className="plain demo-history"><summary>{t("workCompanions",lang)}</summary>{network.filter(p => p.role === "work" && p.label !== s.label).map(p => <div className="demo-peer" key={p.label}><span>{p.full_name}</span><button className="ghost small" disabled={busy} onClick={() => primeChat(roomCopy.demoPrompt.replace("{name}",p.full_name))}>{t("askThisCompanion",lang)}</button></div>)}</details>}
+        </section>
+        <section hidden={view !== "aqua"} aria-label={demoCopy.aqua}>
+          <div className="demo-section-heading"><div><h3>{demoCopy.aquaTitle}</h3><p>{demoCopy.aquaHint}</p></div><button className="linklike" disabled={busy} onClick={() => void load()}>{demoCopy.refresh}</button></div>
+          <ol className="demo-steps demo-guide">{[demoCopy.setup,demoCopy.approve,demoCopy.swap,demoCopy.stop].map((text,i)=><li key={text}><span>{String(i+1).padStart(2,"0")}</span>{text}</li>)}</ol>
+          {!strat?.env && <p className="demo-empty">{demoCopy.noAqua}</p>}
+          {currentWallet && <div className="demo-balance"><span>{demoCopy.wallet}</span><strong>{currentWallet.usdc} <small>mUSDC</small> <span>/</span> {currentWallet.weth} <small>mWETH</small></strong></div>}
+          {strat?.env && s.role === "personal" && !activeStrategies.length && <button disabled={busy} onClick={() => primeChat(aquaCopy.prompt)}>{aquaCopy.prepare}</button>}
+          {activeStrategies.map(showStrategy)}
+          {stoppedStrategies.length > 0 && <details className="plain demo-history"><summary>{demoCopy.pastStrategies} ({stoppedStrategies.length})</summary>{stoppedStrategies.map(showStrategy)}</details>}
+          <details className="plain demo-history"><summary>{demoCopy.mechanics}</summary><p>{aquaCopy.intro}</p><p>{aquaCopy.facts}</p><p>{s.managed ? t("managedWalletDescription",lang) : t("nonCustodial",lang)}</p></details>
+        </section>
+        <details className="plain details-entry demo-evidence" open={detailsOpen} onToggle={e => setDetailsOpen((e.target as HTMLDetailsElement).open)} ref={el => { detailsRef.current=el; }}>
+          <summary>{demoCopy.details}</summary><p>{roomCopy.detailsHint}</p>
+          <p className="small">ENS: {s.fullName}<br />{t("moodLabel",lang)}: <b>{s.ens.mood ?? t("unset",lang)}</b><br />{t("resolveTo",lang)}: <span className="mono">{s.ens.address ?? t("unresolved",lang)}</span></p>
           <ReputationCard key={s.label} snapshot={s.reputation} managed={s.managed} lang={lang} />
-          {s.actions.filter((a) => a.status !== "pending").slice(0, 5).map((a) => (
-            <p key={a.id} className={a.status === "executed" ? "small" : "ng"}>
-              {a.reason === "executing" ? t("statusExecuting", lang) : a.reason === "confirmation_pending" ? t("statusConfirming", lang) : a.status}: {a.reason === "executing" || a.reason === "confirmation_pending" ? "" : a.reason ?? ""}{" "}
-              {a.tx_hash && <a href={`https://sepolia.etherscan.io/tx/${a.tx_hash}`} target="_blank" rel="noreferrer">tx</a>}
-            </p>
-          ))}
-          {strat?.strategies.map((st) => (
-            <p key={st.id} className="small">
-              {st.ship_tx && <a href={`https://sepolia.etherscan.io/tx/${st.ship_tx}`} target="_blank" rel="noreferrer">{t("shipTx", lang)}</a>}
-              {st.ship_tx && st.dock_tx && " / "}
-              {st.dock_tx && <a href={`https://sepolia.etherscan.io/tx/${st.dock_tx}`} target="_blank" rel="noreferrer">{t("dockTx", lang)}</a>}
-            </p>
-          ))}
+          <details className="plain demo-history"><summary>{roomCopy.details}</summary>{s.actions.filter(a => a.status !== "pending").slice(0,10).map(a => {
+            const intent=readDisplayIntent(a.intent);
+            return <div className="demo-receipt-row" key={a.id}><p>{intent ? intentPlainText(intent,lang) : demoCopy.technical}</p><span className="small">{a.reason === "executing" ? t("statusExecuting",lang) : a.reason === "confirmation_pending" ? t("statusConfirming",lang) : a.status === "executed" && !a.reason ? demoCopy.sent : demoCopy.failed}</span>{a.tx_hash && <a href={`https://sepolia.etherscan.io/tx/${a.tx_hash}`} target="_blank" rel="noreferrer">Sepolia ↗</a>}{a.reason && <details className="plain"><summary>{demoCopy.technical}</summary><p>{a.reason}</p></details>}</div>;
+          })}</details>
+          {!s.managed && <div className="card"><p>{t("allowanceInfo",lang,{amount:s.allowanceUsdc})}</p><div className="row"><input aria-label={t("setCap",lang)} value={cap} onChange={e => setCap(e.target.value.replace(/[^0-9.]/g,""))} /><button className="ghost" onClick={approveCap}>{t("setCap",lang)}</button><button className="ghost" onClick={mintTestUsdc} disabled={!address}>{t("mint",lang)}</button></div></div>}
         </details>
       </section>
-    </main>
-  );
+    </div>
+    {switching && <div className="room-progress" role="status">{roomCopy.switching}</div>}
+  </main>;
 }
