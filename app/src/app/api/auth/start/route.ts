@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getDb, type Companion, type PendingAction } from "@/lib/db";
+import { humanSession } from "@/lib/human-approval";
 import { startAuthFlow } from "@/lib/approval";
 import { agentOidcConfig, buildAuthorizeUrl } from "@/lib/oidc";
 import { SESSION_COOKIE, readSession } from "@/lib/session";
@@ -30,6 +31,11 @@ export async function GET(req: NextRequest): Promise<Response> {
       return NextResponse.json({ error: "kind must be bind or approve" }, { status: 400 });
     }
 
+    if (kind === "approve" && await humanSession(db, owned)) {
+      const url = new URL("/approval/world", req.nextUrl.origin);
+      url.searchParams.set("action", ref);
+      return NextResponse.redirect(url);
+    }
     const flow = await startAuthFlow(db, { kind, ref, now: Date.now() });
     return NextResponse.redirect(buildAuthorizeUrl(agentOidcConfig(), { state: flow.state, nonce: flow.nonce, codeVerifier: flow.code_verifier }));
   } catch (e) {

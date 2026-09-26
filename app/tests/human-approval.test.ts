@@ -1,0 +1,20 @@
+import { beforeEach,afterEach,it,expect,vi } from "vitest";
+import { mkdtemp,rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { hashSignal } from "@worldcoin/idkit/hashing";
+import type { IDKitResultSession } from "@worldcoin/idkit";
+import { openDb,type Db } from "@/lib/db";
+import { createPendingAction,handleAuthCallback,startAuthFlow } from "@/lib/approval";
+import { createHumanChallenge,completeHumanChallenge,humanSession } from "@/lib/human-approval";
+let db:Db,dir:string;const now=()=>Date.now();
+beforeEach(async()=>{dir=await mkdtemp(`${tmpdir()}/human-approval-`);db=await openDb(`file:${dir}/db`);await db.execute({sql:"INSERT INTO companions (label,full_name,owner,resolver,personality,world_nullifier,agent_sub,created_at,human) VALUES (?,?,?,?,?,?,?,?,?)",args:["sora","sora.otomo.eth","0xowner","0xresolver","{}","n","sandbox-sub",now(),"human"]});});
+afterEach(async()=>{db.close();await rm(dir,{recursive:true,force:true});});
+function proof(c:{signal:string},nonce="nonce",session_id:`session_${string}`="session_owner"):IDKitResultSession{return {protocol_version:"4.0",environment:"production",nonce,session_id,responses:[{identifier:"selfie",issuer_schema_id:11,signal_hash:hashSignal(c.signal),session_nullifier:["0x123","0x456"],proof:[],expires_at_min:Math.floor(now()/1000)+300,sybil_score:0}]};}
+const deps=()=>({verify:vi.fn(async()=>true),execute:vi.fn(async()=>({txHash:"0xtx"}))});
+async function enroll(){const c=await createHumanChallenge(db,"sora",null,"nonce",now());await completeHumanChallenge(db,"sora",c.id,proof(c),now(),deps());}
+async function setup(){await enroll();const a=await createPendingAction(db,{companion:"sora",intent:{type:"private_task",summary:"test"},amountUsdc:0,now:now()});const c=await createHumanChallenge(db,"sora",a.id,"fresh",now());const p=proof(c,"fresh");p.responses[0].session_nullifier=["0x789","0xabc"];return {a,c,p};}
+it("enrolls only after verified production proof and never executes on enrollment",async()=>{const c=await createHumanChallenge(db,"sora",null,"nonce",now());const d=deps();await completeHumanChallenge(db,"sora",c.id,proof(c),now(),d);expect(await humanSession(db,"sora")).toBe("session_owner");expect(d.execute).not.toHaveBeenCalled();await expect(createHumanChallenge(db,"sora",null,"nonce",now())).rejects.toThrow("already linked");});
+it("executes once and rejects replay",async()=>{const {c,p}=await setup();const d=deps();await completeHumanChallenge(db,"sora",c.id,p,now(),d);await expect(completeHumanChallenge(db,"sora",c.id,p,now(),d)).rejects.toThrow();expect(d.execute).toHaveBeenCalledTimes(1);});
+it.each(["environment","nonce","owner","signal","portal","expired","mutated"])("rejects %s without executing",async(kind)=>{const {a,c,p}=await setup();const d=deps();if(kind==="environment")p.environment="sandbox";if(kind==="nonce")p.nonce="wrong";if(kind==="owner")p.session_id="session_other";if(kind==="signal")p.responses[0].signal_hash="0x0";if(kind==="portal")d.verify.mockResolvedValue(false);if(kind==="expired")await db.execute({sql:"UPDATE human_challenges SET expires_at=0 WHERE id=?",args:[c.id]});if(kind==="mutated")await db.execute({sql:"UPDATE pending_actions SET amount_usdc=10 WHERE id=?",args:[a.id]});await expect(completeHumanChallenge(db,"sora",c.id,p,now(),d)).rejects.toThrow();expect(d.execute).not.toHaveBeenCalled();});
+it("rejects proof nullifier reuse across challenges",async()=>{const {c,p}=await setup();p.responses[0].session_nullifier=["291","1110"];const d=deps();await expect(completeHumanChallenge(db,"sora",c.id,p,now(),d)).rejects.toThrow();expect(d.execute).not.toHaveBeenCalled();});
+it("prevents an existing sandbox callback from downgrading enrolled account",async()=>{const {a}=await setup();const f=await startAuthFlow(db,{kind:"approve",ref:a.id,now:now()});const execute=vi.fn(async()=>({}));const r=await handleAuthCallback({state:f.state,code:"c",error:null,now:now()+1000},{db,authenticate:async()=>({sub:"sandbox-sub",authTime:Math.ceil(now()/1000)+1}),execute});expect(r.ok).toBe(false);expect(execute).not.toHaveBeenCalled();});

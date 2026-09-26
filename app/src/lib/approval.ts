@@ -1,3 +1,4 @@
+import { humanSession } from "./human-approval";
 import { randomUUID } from "node:crypto";
 import type { Address } from "viem";
 import type { AuthFlow, Companion, Db, PendingAction } from "./db";
@@ -107,10 +108,11 @@ export async function handleAuthCallback(input: CallbackInput, deps: CallbackDep
 
   const companion = (await db.execute({ sql: `SELECT * FROM companions WHERE label = ?`, args: [action.companion] })).rows[0] as unknown as Companion | undefined;
   if (!companion?.agent_sub) return fail("相棒と本人の契りがまだ結ばれていません");
+  if (await humanSession(db, companion.label)) return fail("Production World ID approval is required; sandbox/OIDC cannot approve this account");
   if (companion.agent_sub !== identity.sub) return fail("相棒の持ち主と別の人が承認しようとしました");
 
   // Claim the action atomically so it can execute at most once.
-  const claimed = await db.execute({ sql: `UPDATE pending_actions SET status = 'executed', reason = 'executing' WHERE id = ? AND status = 'pending'`, args: [action.id] });
+  const claimed = await db.execute({ sql: `UPDATE pending_actions SET status = 'executed', reason = 'executing' WHERE id = ? AND status = 'pending' AND NOT EXISTS (SELECT 1 FROM human_sessions h JOIN companions c ON h.human=COALESCE(c.human,c.world_nullifier) WHERE c.label=pending_actions.companion)`, args: [action.id] });
   if (claimed.rowsAffected !== 1) return fail("この依頼はすでに処理済みです");
 
   try {
