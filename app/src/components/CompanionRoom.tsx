@@ -39,13 +39,10 @@ interface Rec {
   glanceX: number;
 }
 
-/** Siblings stand slightly behind and to the sides; the current one is front-center. */
-const SIBLING_SLOTS = [
-  [-1.7, -0.55],
-  [1.7, -0.55],
-  [-2.9, -0.95],
-  [2.9, -0.95],
-] as const;
+/** World-space half-width of a companion incl. breathing room, per render scale. */
+const RADIUS_CURRENT = 1.25;
+const RADIUS_SIBLING = 1.0;
+const SLOT_GAP = 0.55;
 
 export function CompanionRoom({ companions, current, onSelect, bubble, thinking, className }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -67,15 +64,20 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
     const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);
     camera.position.set(0, 0.7, 6.2);
 
-    // Soft round floor: a radial-gradient disc, like a rug under the pets.
+    // Soft oval rug: a warm radial-gradient disc that grounds the whole group.
     const floorMat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      uniforms: { uColor: { value: new THREE.Color("#6b537f") } },
+      uniforms: { uInner: { value: new THREE.Color("#8f6d92") }, uOuter: { value: new THREE.Color("#463a66") } },
       vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
       fragmentShader: /* glsl */ `
-        uniform vec3 uColor; varying vec2 vUv;
-        void main(){ float d = length(vUv - 0.5) * 2.0; float a = exp(-d * d * 3.2) * 0.85; gl_FragColor = vec4(uColor, a); }`,
+        uniform vec3 uInner; uniform vec3 uOuter; varying vec2 vUv;
+        void main(){
+          float d = length(vUv - 0.5) * 2.0;
+          vec3 col = mix(uInner, uOuter, smoothstep(0.15, 1.0, d));
+          float a = exp(-d * d * 2.4) * 0.95;
+          gl_FragColor = vec4(col, a);
+        }`,
     });
     const floor = new THREE.Mesh(new THREE.CircleGeometry(4.6, 48), floorMat);
     floor.rotation.x = -Math.PI / 2;
@@ -110,8 +112,10 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
       const el = document.createElement("div");
       el.className = "petbubble";
       el.textContent = petLine();
-      el.style.left = `${((p.x + 1) / 2) * r.width}px`;
-      el.style.top = `${((1 - p.y) / 2) * r.height}px`;
+      const px = ((p.x + 1) / 2) * r.width;
+      const py = ((1 - p.y) / 2) * r.height;
+      el.style.left = `${Math.min(Math.max(px, 44), r.width - 44)}px`;
+      el.style.top = `${Math.max(py, 34)}px`;
       host.appendChild(el);
       petBubbles.add(el);
       window.setTimeout(() => {
@@ -124,10 +128,28 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
     let buildKey = "";
     let swapping = false;
 
-    const slotFor = (info: RoomCompanion, index: number): { pos: THREE.Vector3; scale: number } =>
-      info.label === propsRef.current.current
-        ? { pos: new THREE.Vector3(0, 0, 0.55), scale: 1 }
-        : { pos: new THREE.Vector3(SIBLING_SLOTS[index % SIBLING_SLOTS.length][0], 0, SIBLING_SLOTS[index % SIBLING_SLOTS.length][1]), scale: 0.8 };
+    /** Siblings alternate left/right of the current pet, spaced by radius + gap so they never overlap. */
+    const slots = () => {
+      const map = new Map<string, { pos: THREE.Vector3; scale: number }>();
+      const list = propsRef.current.companions;
+      const portrait = (host.clientWidth || 1) / (host.clientHeight || 1) < 0.75;
+      const sibScale = portrait && list.length > 2 ? 0.72 : 0.8;
+      for (const info of list) {
+        if (info.label === propsRef.current.current) {
+          map.set(info.label, { pos: new THREE.Vector3(0, 0, 0.55), scale: 1 });
+        }
+      }
+      const others = list.filter((c) => c.label !== propsRef.current.current);
+      const perSide = [0, 0];
+      others.forEach((info, i) => {
+        const side = i % 2 === 0 ? -1 : 1; // left, right, left, right…
+        const li = perSide[i % 2]++;
+        const x = side * (RADIUS_CURRENT + SLOT_GAP + RADIUS_SIBLING * sibScale + li * (2 * RADIUS_SIBLING * sibScale + SLOT_GAP));
+        const z = -0.55 - li * 0.35;
+        map.set(info.label, { pos: new THREE.Vector3(x, 0, z), scale: sibScale });
+      });
+      return map;
+    };
 
     const rebuild = () => {
       for (const r of records) {
@@ -137,14 +159,13 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
         r.tag.remove();
       }
       records = [];
-      let sib = 0;
+      const slotMap = slots();
       for (const info of propsRef.current.companions) {
         const model = createCompanion(traitsFromSeed(info.full_name));
         const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.95, 32), shadowMat());
         shadow.rotation.x = -Math.PI / 2;
         shadow.position.y = -1.02;
-        const slot = slotFor(info, sib);
-        if (info.label !== propsRef.current.current) sib++;
+        const slot = slotMap.get(info.label)!;
         model.group.position.set(slot.pos.x, 0, slot.pos.z);
         model.group.scale.setScalar(slot.scale);
         scene.add(model.group, shadow);
@@ -175,7 +196,6 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
       const h = host.clientHeight || 1;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
-      camera.position.z = camera.aspect < 0.75 ? 8.4 : 6.2;
       camera.updateProjectionMatrix();
     };
     const ro = new ResizeObserver(resize);
@@ -194,14 +214,12 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
           swapping = true;
           const cur = records.find((r) => r.info.label === propsRef.current.current);
           // Walk the picked sibling forward while the current one steps aside.
-          const tmp = cur?.target.clone();
           if (cur) {
             cur.target.copy(rec.target);
-            cur.scaleTarget = 0.8;
+            cur.scaleTarget = rec.scaleTarget;
           }
           rec.target.set(0, 0, 0.55);
           rec.scaleTarget = 1;
-          void tmp;
           window.setTimeout(() => propsRef.current.onSelect(rec.info.label), reduced ? 350 : 900);
         }
       },
@@ -276,6 +294,14 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
       petting.update(dt);
       sparkles.update(dt);
 
+      // Fit every companion in view: distance comes from the group's total width and the aspect.
+      const tanHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      const totalHalf = records.reduce((m, r) => Math.max(m, Math.abs(r.target.x) + RADIUS_SIBLING * r.scaleTarget), RADIUS_CURRENT) + 0.4;
+      const distW = totalHalf / (tanHalf * Math.max(camera.aspect, 0.3));
+      const distH = 1.65 / tanHalf;
+      camera.position.z = damp(camera.position.z, Math.max(5.4, distW, distH), 3, dt);
+      floor.scale.x = (totalHalf + 1.9) / 4.6;
+
       // Speech bubble over the current companion: latest assistant line, or "…" while thinking.
       const cur = records.find((r) => r.info.label === p.current);
       if (cur) {
@@ -285,8 +311,11 @@ export function CompanionRoom({ companions, current, onSelect, bubble, thinking,
         cur.model.group.getWorldPosition(worldV);
         worldV.y += 1.45;
         const b = project(worldV);
-        bubbleEl.style.left = `${b.x}px`;
-        bubbleEl.style.top = `${b.y}px`;
+        // Keep the bubble inside the room: top ≥ 8px, horizontally within the viewport.
+        const bw = bubbleEl.offsetWidth || 120;
+        const bh = bubbleEl.offsetHeight || 48;
+        bubbleEl.style.left = `${Math.min(Math.max(b.x, bw / 2 + 8), hostRect.width - bw / 2 - 8)}px`;
+        bubbleEl.style.top = `${Math.max(b.y, bh + 8)}px`;
       }
 
       camera.position.x = damp(camera.position.x, petting.pointer.x * 0.4, 3, dt);

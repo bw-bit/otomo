@@ -39,8 +39,8 @@ const easeOutBack = (x: number) => {
   return 1 + (c1 + 1) * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 };
 
-const PREVIEW_OPACITY = 0.35;
-const PREVIEW_GLOW = 0.3;
+const PREVIEW_OPACITY = 0.55;
+const PREVIEW_GLOW = 0.35;
 
 export function BirthScene({ phase, seed, previewSeed = null, pokeNonce = 0, className }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -83,10 +83,13 @@ export function BirthScene({ phase, seed, previewSeed = null, pokeNonce = 0, cla
     // Everything the companion owns lives in one rig, framed above the UI panel.
     const rig = new THREE.Group();
     rig.position.y = 0.55;
-    rig.scale.setScalar(0.74);
+    let rigScale = 0.74;
+    rig.scale.setScalar(rigScale);
     scene.add(rig);
     particles.points.position.copy(rig.position);
     particles.points.scale.copy(rig.scale);
+    // The companion must sit in the free area above the form panel, whatever its height.
+    const panelEl = host.parentElement?.querySelector<HTMLElement>(".panel") ?? null;
 
     // Orbiting motes: soft additive points (flat opaque dots read as UI bugs, not light).
     const MAX_MOTES = 8;
@@ -261,6 +264,18 @@ export function BirthScene({ phase, seed, previewSeed = null, pokeNonce = 0, cla
         motePos.set([Math.cos(a) * r, Math.sin(a * 0.7 + i) * 0.4, Math.sin(a) * r * 0.6], i * 3);
       }
       moteGeo.attributes.position.needsUpdate = true;
+
+      // Keep the rig centered in the visible band between the top of the screen and the panel.
+      const hostH = host.clientHeight || 1;
+      const freeTop = panelEl ? panelEl.getBoundingClientRect().top : hostH;
+      const visibleH = Math.max(140, Math.min(freeTop, hostH));
+      const shiftPx = Math.min(Math.max((hostH - visibleH) / 2, 0), hostH * 0.3);
+      const worldPerPx = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z) / hostH;
+      rig.position.y = damp(rig.position.y, 0.55 + shiftPx * worldPerPx, 4, dt);
+      rigScale = damp(rigScale, 0.74 * Math.max(0.5, Math.min(1, visibleH / (hostH * 0.55))), 4, dt);
+      rig.scale.setScalar(rigScale);
+      particles.points.position.copy(rig.position);
+      particles.points.scale.copy(rig.scale);
 
       // Subtle parallax only; the camera never orbits on its own.
       camera.position.x = damp(camera.position.x, petting.pointer.x * 0.35, 3, dt);

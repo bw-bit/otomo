@@ -42,7 +42,7 @@ interface StratState {
 const subKey = (lang: Lang, content: string) => `${lang}:${content}`;
 
 interface PeerCompanion { label: string; full_name: string; role: "personal" | "work"; skills?: string[] }
-const ROLE_LABEL = { personal: "個人", work: "仕事" } as const;
+const ROLE_LABEL = { personal: "くらし", work: "しごと" } as const;
 
 export default function CompanionPage() {
   const params = useSearchParams();
