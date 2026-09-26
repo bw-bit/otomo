@@ -413,8 +413,7 @@ export default function CompanionPage() {
   const activeStrategies = strat?.strategies.filter(st => st.status !== "docked") ?? [];
   const stoppedStrategies = strat?.strategies.filter(st => st.status === "docked") ?? [];
   const currentWallet = strat?.strategies.find(st => st.wallet)?.wallet;
-  const approvalIssuer = s.reputation.verification.approvalIssuer;
-  const approvalLabel = approvalIssuer.includes("sandbox") ? demoCopy.sandbox : approvalIssuer === "https://developer.world.org" ? demoCopy.production : demoCopy.unknown;
+  const approvalLabel = demoCopy.approvals;
   const showStrategy = (st: StrategyRow) => <article className="demo-strategy" key={st.id}>
     <div className="demo-job-heading"><strong>{st.usdc_amount} mUSDC + {st.weth_amount} mWETH</strong><span className="demo-status">{st.status === "ready" ? demoCopy.ready : st.status === "shipped" ? demoCopy.active : demoCopy.stopped}</span></div>
     <p className="small">{demoCopy.deadline}: {new Date(st.deadline * 1000).toLocaleString(LANG_LOCALES[lang])} · 0.3%</p>
