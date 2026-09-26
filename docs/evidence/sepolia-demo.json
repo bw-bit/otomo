@@ -93,5 +93,34 @@
     "shipNoTokenTransfer": true,
     "swapOutput": true,
     "paidWork": true
+  },
+  "officialAquaRehearsal2026_09_26": {
+    "note": "Rehearsal bound to the official 1inch Aqua registry on Sepolia; Otomo redeployed its SwapVM router/program/builder. Maker = sora companion wallet.",
+    "contracts": {
+      "aqua": "0x1111113CCf1426A8E30e2bfF5E005d929bF6a90a",
+      "router": "0x6069AaEBC937b794b02e9Fb14EeBE3881608B7C1",
+      "otomoProgram": "0x90F6d2eF61512b56A4D1b6DA7d8411a4859c5eaA",
+      "orderBuilder": "0x159a581Ca16dE62D58bC24E483f25f02066B14c5",
+      "usdc": "0x16f95D91DBa7dA3Aca778Ec053dF0FF6C6A8aA8e",
+      "weth": "0xf7A9C97d0DC45A13cd7e3E17406fA61CA72d66FA"
+    },
+    "deployTxs": {
+      "router": "0x964f2b14e197a574b1f77bdbc3db3ff4270142b8e811946fb610bc6ea74d9e9b",
+      "otomoProgram": "0x1d4808651eb1cca171e82e03f0eaf0250e3890ef565b83a0ef779e46adab4e7b",
+      "orderBuilder": "0xae02a3465e9910f9e54f94cdf4516b66615cb626a62ba080a16bd7e4a738dcc4"
+    },
+    "maker": "0x67C15bae145eA5cAeE52989976491fe48dC4D99C",
+    "taker": "0x21F09fcd8d58Da73c8d597B5d712F0dDCCB617C9",
+    "strategyHash": "0xccadb1ecbbad7d7aa892567f5dc425fd3b6bf00b8e93d05cf9c34dde77e424e8",
+    "txs": {
+      "mint-taker-mWETH": "0x8940d9be2d0086a961d3712ba8bf0d51b4bd42cd7baf155269b85bae79bc2bd8",
+      "approve-maker-mUSDC-to-Aqua": "0xe7e6534c7f083f7ea75d345c6f88ae21b4aff53615a5cc29a11e699be801273d",
+      "approve-maker-mWETH-to-Aqua": "0x3f9b778a8bd92fa2e2711de7a78013c81af48cf2f1ac5817b2ecbee732d745b8",
+      "approve-agent-mWETH-to-Router": "0xe1eaa96fdaca610cc0abac5fff963f567ef9df05d1e7c3fc6b0d76c0c76848aa",
+      "ship": "0xef77b43136b9e7f909e2b2d4d947d879a9e8ec859accd318fcdea07ee5dda5f2",
+      "third-party-swap": "0x5b6198b9fd939af26ed51422fb5671b9c2a267281fdb7f93256ba5e066b4f988",
+      "dock": "0x588f58a6896ba008c150ab0845b772c776807da3ef21f04818b39f2682df4283"
+    },
+    "runReport": "work/aqua-demo/sepolia-run-20260926T193605296Z.json"
   }
 }

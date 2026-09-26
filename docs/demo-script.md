@@ -21,6 +21,18 @@ The functional UI flow was rehearsed again on September 26: bilingual work, sepa
 - [sora ENS reputation publication](https://sepolia.etherscan.io/tx/0x7b224d66805a00f3bbaf5fe384df18c147e6e6df8804d227543ed40dee9ac310)
 - Machine-readable read-only recheck: [sepolia-demo.json](evidence/sepolia-demo.json).
 
+### Official 1inch Aqua registry (2026-09-26 rehearsal)
+
+The demo now uses the official Aqua registry on Sepolia `0x1111113CCf1426A8E30e2bfF5E005d929bF6a90a` with Otomo's own AquaSwapVMRouter `0x6069AaEBC937b794b02e9Fb14EeBE3881608B7C1` (redeployed, allowed by the rules) and OtomoOrderBuilder `0x159a581Ca16dE62D58bC24E483f25f02066B14c5`. sora's companion wallet is the maker.
+
+| Step | Tx |
+|---|---|
+| approve mUSDC→Aqua | [0xe7e6534c](https://sepolia.etherscan.io/tx/0xe7e6534c7f083f7ea75d345c6f88ae21b4aff53615a5cc29a11e699be801273d) |
+| approve mWETH→Aqua | [0x3f9b778a](https://sepolia.etherscan.io/tx/0x3f9b778a8bd92fa2e2711de7a78013c81af48cf2f1ac5817b2ecbee732d745b8) |
+| ship | [0xef77b431](https://sepolia.etherscan.io/tx/0xef77b43136b9e7f909e2b2d4d947d879a9e8ec859accd318fcdea07ee5dda5f2) |
+| third-party swap | [0x5b6198b9](https://sepolia.etherscan.io/tx/0x5b6198b9fd939af26ed51422fb5671b9c2a267281fdb7f93256ba5e066b4f988) |
+| dock | [0x588f58a6](https://sepolia.etherscan.io/tx/0x588f58a6896ba008c150ab0845b772c776807da3ef21f04818b39f2682df4283) |
+
 The latest delivered introduction contains English and Japanese, including 1inch Aqua + SwapVM, Sepolia and Sandbox disclosures. The original earlier delivery was English only.
 
 ## Still to demonstrate

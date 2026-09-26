@@ -30,11 +30,6 @@ export async function GET(req: NextRequest): Promise<Response> {
       return NextResponse.json({ error: "kind must be bind or approve" }, { status: 400 });
     }
 
-    if (kind === "approve") {
-      const url = new URL("/approval/world", req.nextUrl.origin);
-      url.searchParams.set("action", ref);
-      return NextResponse.redirect(url);
-    }
     const flow = await startAuthFlow(db, { kind, ref, now: Date.now() });
     return NextResponse.redirect(buildAuthorizeUrl(agentOidcConfig(), { state: flow.state, nonce: flow.nonce, codeVerifier: flow.code_verifier }));
   } catch (e) {

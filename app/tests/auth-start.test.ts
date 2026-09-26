@@ -25,12 +25,21 @@ afterEach(async () => { db.close(); await rm(dir, { recursive: true, force: true
 const req = (url: string, label?: string) =>
   new NextRequest(url, { headers: label ? { cookie: `${SESSION_COOKIE}=${sessionValue(label)}` } : {} });
 
-it("kind=approve always redirects to the owner approval page", async () => {
+it("kind=approve always starts the Sandbox OIDC flow (fresh verification)", async () => {
+  vi.stubEnv("AGENT_OIDC_ISSUER", "https://sandbox.auth.world.org");
+  vi.stubEnv("AGENT_OIDC_CLIENT_ID", "test-client");
+  vi.stubEnv("AGENT_OIDC_CLIENT_SECRET", "test-secret");
+  vi.stubEnv("AGENT_OIDC_REDIRECT_URI", "https://app.example/api/auth/callback");
   const a = await createPendingAction(db, { companion: "alice", intent: { type: "private_task", summary: "x" }, amountUsdc: 0, now: Date.now() });
   const res = await GET(req(`https://app.example/api/auth/start?kind=approve&action=${a.id}`, "alice"));
   expect(res.status).toBe(307);
-  expect(res.headers.get("location")).toBe(`https://app.example/approval/world?action=${a.id}`);
-  expect((await db.execute("SELECT COUNT(*) AS n FROM auth_flows")).rows[0].n).toBe(0);
+  const loc = res.headers.get("location") ?? "";
+  expect(loc.startsWith("https://sandbox.auth.world.org/api/v1/authorize?")).toBe(true);
+  expect(loc).toContain("prompt=login");
+  const flows = (await db.execute("SELECT * FROM auth_flows")).rows;
+  expect(flows.length).toBe(1);
+  expect(flows[0].kind).toBe("approve");
+  expect(flows[0].ref).toBe(a.id);
 });
 
 it("kind=approve still requires the owner session and a pending action", async () => {
