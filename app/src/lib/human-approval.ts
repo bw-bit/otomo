@@ -42,7 +42,7 @@ export async function completeHumanChallenge(db: Db, label: string, id: string, 
   if (proof.protocol_version!=="4.0" || proof.environment!=="production" || proof.nonce!==ch.nonce || !/^session_.+/.test(proof.session_id)) throw new Error("Production proof does not match this challenge");
   if (ch.session_id && proof.session_id!==ch.session_id) throw new Error("A different World ID cannot approve this action");
   const expected=hashSignal(String(ch.signal)).toLowerCase();
-  if (!proof.responses?.length || proof.responses.some(r=>r.signal_hash?.toLowerCase()!==expected || r.session_nullifier?.length!==2 || r.issuer_schema_id!==11)) throw new Error("A fresh Selfie Check proof bound to this action is required");
+  if (!proof.responses?.length || proof.responses.some(r=>r.signal_hash?.toLowerCase()!==expected || r.session_nullifier?.length!==2 || ![1,11,9303,9310].includes(r.issuer_schema_id))) throw new Error("A fresh production credential proof bound to this action is required");
   const keys=proof.responses.map(r=>`${proof.session_id}:${r.issuer_schema_id}:${r.session_nullifier.map(v=>BigInt(v).toString()).join(":")}`);
   if (!await deps.verify(proof)) throw new Error("World ID production verification failed");
   const tx=await db.transaction("write");
