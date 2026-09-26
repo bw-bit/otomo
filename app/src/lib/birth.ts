@@ -1,9 +1,10 @@
 import { hashSignal } from "@worldcoin/idkit/hashing";
 import type { Db } from "./db";
 
-export const BIRTH_ACTION = "otomo-birth";
-/** Deterministic hashed form of BIRTH_ACTION as it appears inside v4 payloads. */
-export const BIRTH_ACTION_HASH = "0x00b3ad4f6105123548927b72800e30fd398fe0c73063a4ee2b369852b4dc7cf2";
+/** Birth action. NEXT_PUBLIC_WORLD_BIRTH_ACTION overrides it for recording/staging environments only. */
+export const BIRTH_ACTION = process.env.NEXT_PUBLIC_WORLD_BIRTH_ACTION ?? "otomo-birth";
+/** Deterministic hashed form of BIRTH_ACTION as it appears inside v4 payloads (IDKit hashes actions like signals). */
+export const BIRTH_ACTION_HASH = hashSignal(BIRTH_ACTION).toLowerCase();
 
 export interface SelfieResponseItem {
   identifier: string;

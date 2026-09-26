@@ -5,7 +5,7 @@ import path from "node:path";
 import { decodeFunctionData, toHex } from "viem";
 import { hashSignal } from "@worldcoin/idkit/hashing";
 import { openDb, type Db } from "@/lib/db";
-import { checkBirthProof, markNullifierUsed, type BirthPayload } from "@/lib/birth";
+import { BIRTH_ACTION, BIRTH_ACTION_HASH, checkBirthProof, markNullifierUsed, type BirthPayload } from "@/lib/birth";
 import {
   COMPANION_ROLE_BITMAP,
   MOOD_KEY,
@@ -24,7 +24,7 @@ import { traitsFromSeed } from "@/three/traits";
 
 const WALLET = "0xAbCdEf0123456789abcdef0123456789ABCDEF01";
 const payload = (over: Partial<BirthPayload["responses"][0]> = {}): BirthPayload => ({
-  action: "otomo-birth",
+  action: BIRTH_ACTION,
   responses: [{ identifier: "selfie", issuer_schema_id: 11, nullifier: "0xnull", signal_hash: hashSignal(WALLET.toLowerCase()), sybil_score: 1, ...over }],
 });
 
@@ -38,11 +38,16 @@ afterEach(async () => { db.close(); await rm(dir, { recursive: true, force: true
 const ok = vi.fn(async () => ({ ok: true, detail: "" }));
 
 describe("birth proof", () => {
+  it("derives BIRTH_ACTION_HASH the way IDKit hashes v4 actions", () => {
+    expect(BIRTH_ACTION).toBe("otomo-birth");
+    expect(hashSignal("otomo-birth")).toBe("0x00b3ad4f6105123548927b72800e30fd398fe0c73063a4ee2b369852b4dc7cf2");
+    expect(BIRTH_ACTION_HASH).toBe(hashSignal(BIRTH_ACTION).toLowerCase());
+  });
   it("accepts a verified selfie proof bound to the wallet", async () => {
     expect(await checkBirthProof(payload(), WALLET, { db, verifyWithPortal: ok })).toEqual({ ok: true, nullifier: "0xnull", sybilScore: 1, credential: "selfie" });
   });
   it("accepts the hashed v4 action form", async () => {
-    const p = { ...payload(), action: "0x00b3ad4f6105123548927b72800e30fd398fe0c73063a4ee2b369852b4dc7cf2" };
+    const p = { ...payload(), action: BIRTH_ACTION_HASH };
     expect(await checkBirthProof(p, WALLET, { db, verifyWithPortal: ok })).toMatchObject({ ok: true });
   });
   it("rejects a different action", async () => {
