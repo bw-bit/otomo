@@ -27,3 +27,9 @@ Otomoでは1つのWorld ID識別子から相棒を最大3体（既定、`WORLD_M
 最初に保存された本番失敗報告（2026-09-26 00:41 UTC）から、成功した `/api/birth`（02:54 UTC）までは約2時間13分。これは着手からの総時間ではない。最大の摩擦は、IDKitの汎用エラーだけでは資格情報・証明失敗を切り分けられなかった点。Action/RP署名/Portal precheckを照合し、IDKit 4.3.0、公式credential preset、旧Orbフォールバック、600秒署名TTLを順に反映して成功した。単一変更の寄与は切り分けられていない。最も有効な改善は、IDKitの具体的エラーコードをアプリ画面に表示し、サーバー到達前の失敗を特定できるようにしたこと。
 
 未収録: World ID for Agentsの拒否経路、動画、通しリハーサル。提出時は実演または証拠と未実演部分を区別する。
+
+## Later verification — production UI and Session proofs
+
+The production app subsequently completed the sora → taro request/delivery/review/reward flow and the Aqua ship/swap/dock lifecycle on Sepolia. Approvals used the Sandbox identity; receipt evidence is in `docs/evidence/sepolia-demo.json`.
+
+A separate production IDKit Session-proof enrollment was attempted in World App and returned `world_id_4_not_available`. No production human session was accepted by the backend. This path is not equivalent to birth Action reuse and does not prove that the user failed because they were already verified. The UI now explains the unresolved compatibility issue, avoids claiming enrollment/execution, and prevents reuse of expired challenges. Production sensitive-action approval remains unverified.

@@ -8,6 +8,7 @@ contracts/out/
 contracts/cache/
 *.db-wal
 *.db-shm
+work/
 .next/
 next-env.d.ts
 *.tsbuildinfo

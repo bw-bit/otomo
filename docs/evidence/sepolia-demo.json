@@ -1,0 +1,97 @@
+{
+  "verifiedAt": "2026-09-26T06:49:34.892Z",
+  "chainId": 11155111,
+  "strategy": {
+    "id": "c1146f52-63c5-4a48-8ebf-f936a7f48b5f",
+    "companion": "sora",
+    "maker": "0x67c15bae145ea5caee52989976491fe48dc4d99c",
+    "router": "0xA7d3aBC48733d4692F7408f9453aCEEdF49ae0C1",
+    "strategy_hash": "0xe024561ae6f56cd30b293dca0c12340278d5937cd3934b0b9dc29c5d1cae2414",
+    "usdc_amount": 10,
+    "weth_amount": 0.005,
+    "status": "docked",
+    "ship_tx": "0xfdf6a1a210bbe96dec32c1f86ee5aebee1104c2610bdcb83400a9888fa19cb73",
+    "dock_tx": "0x45235c721d1158e96c8e32e9ddb121b4e35b6dd98d321f7d8472e3299cf1db9a"
+  },
+  "receipts": [
+    {
+      "hash": "0x665e2ba50bd08a3c23c73ce8acfdc55d5fe7e291a447d0f19cf01890141a5279",
+      "status": "success",
+      "blockNumber": "11784306",
+      "from": "0x67c15bae145ea5caee52989976491fe48dc4d99c",
+      "to": "0x16f95d91dba7da3aca778ec053df0ff6c6a8aa8e",
+      "transfers": [
+        {
+          "token": "0x16f95d91dba7da3aca778ec053df0ff6c6a8aa8e",
+          "from": "0x67C15bae145eA5cAeE52989976491fe48dC4D99C",
+          "to": "0x47638B38C6706FB60d710396CdD672A54C9160f0",
+          "value": "2000000"
+        }
+      ]
+    },
+    {
+      "hash": "0xfdf6a1a210bbe96dec32c1f86ee5aebee1104c2610bdcb83400a9888fa19cb73",
+      "status": "success",
+      "blockNumber": "11784357",
+      "from": "0x67c15bae145ea5caee52989976491fe48dc4d99c",
+      "to": "0x6b7110a6035beec23493242891fd490fc1e44167",
+      "transfers": []
+    },
+    {
+      "hash": "0x90fd7ab3e00d650f05a4b3b43faf43816c7b22d51d9266b93c50cda4725b22af",
+      "status": "success",
+      "blockNumber": "11784369",
+      "from": "0x21f09fcd8d58da73c8d597b5d712f0ddccb617c9",
+      "to": "0xa7d3abc48733d4692f7408f9453aceedf49ae0c1",
+      "transfers": [
+        {
+          "token": "0x16f95d91dba7da3aca778ec053df0ff6c6a8aa8e",
+          "from": "0x67C15bae145eA5cAeE52989976491fe48dC4D99C",
+          "to": "0x21F09fcd8d58Da73c8d597B5d712F0dDCCB617C9",
+          "value": "6659986"
+        },
+        {
+          "token": "0xf7a9c97d0dc45a13cd7e3e17406fa61ca72d66fa",
+          "from": "0x21F09fcd8d58Da73c8d597B5d712F0dDCCB617C9",
+          "to": "0xA7d3aBC48733d4692F7408f9453aCEEdF49ae0C1",
+          "value": "10000000000000000"
+        },
+        {
+          "token": "0xf7a9c97d0dc45a13cd7e3e17406fa61ca72d66fa",
+          "from": "0xA7d3aBC48733d4692F7408f9453aCEEdF49ae0C1",
+          "to": "0x67C15bae145eA5cAeE52989976491fe48dC4D99C",
+          "value": "10000000000000000"
+        }
+      ]
+    },
+    {
+      "hash": "0x45235c721d1158e96c8e32e9ddb121b4e35b6dd98d321f7d8472e3299cf1db9a",
+      "status": "success",
+      "blockNumber": "11784380",
+      "from": "0x67c15bae145ea5caee52989976491fe48dc4d99c",
+      "to": "0x6b7110a6035beec23493242891fd490fc1e44167",
+      "transfers": []
+    }
+  ],
+  "virtual": {
+    "usdc": [
+      "0",
+      255
+    ],
+    "weth": [
+      "0",
+      255
+    ]
+  },
+  "productionIdentityEnrollmentCount": 0,
+  "approvalForRecordedTransactions": "World ID for Agents sandbox (mocked identity)",
+  "checks": {
+    "allReceiptsSucceeded": true,
+    "companionMaker": true,
+    "docked": true,
+    "zeroVirtual": true,
+    "shipNoTokenTransfer": true,
+    "swapOutput": true,
+    "paidWork": true
+  }
+}

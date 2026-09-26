@@ -1,6 +1,6 @@
 # Otomo
 
-**English summary:** Otomo ("companion" in Japanese) lets each verified World ID nullifier raise up to 3 AI companions with explicit roles (personal / work) — no wallet connect needed. Role permissions are enforced by deterministic policy code, and companions discover each other through ENS text records (`otomo.role`, `otomo.skills`, `otomo.siblings`). Each companion owns an encrypted wallet and a non-transferable ENSv2 subname with a dedicated Permissioned Resolver. Its Aqua + SwapVM strategy records virtual liquidity without depositing tokens on `ship`; tokens move only when a swap executes. Consequential actions use fresh OIDC approval in the World ID for Agents event sandbox; the sandbox identity is mocked. The Aqua flow is implemented but has not yet been exercised in the production app.
+**English summary:** Otomo ("companion" in Japanese) lets each verified World ID nullifier raise up to 3 AI companions with explicit roles (personal / work) — no wallet connect needed. Role permissions are enforced by deterministic policy code, and companions discover each other through ENS text records (`otomo.role`, `otomo.skills`, `otomo.siblings`). Each companion owns an encrypted wallet and a non-transferable ENSv2 subname with a dedicated Permissioned Resolver. Its Aqua + SwapVM strategy records virtual liquidity without depositing tokens on `ship`; tokens move only when a swap executes. Consequential actions use fresh OIDC approval in the World ID for Agents event sandbox; the sandbox identity is mocked. The deployed application has completed the Aqua ship → swap → dock lifecycle and a 2 mUSDC job payment on Sepolia. These operations used Sandbox approval; production Session-proof approval remains unverified.
 
 ---
 
@@ -18,7 +18,7 @@ Otomo は、World ID で本人確認した人間（Selfie Check / NFCパスポ�
 2. **契り**: 「World ID で契りを結ぶ」→ World ID for Agents（OIDC sandbox）で初回ログイン。`sub` を相棒に紐付け、以後の承認はこの `sub` 一致が前提。
 3. **チャット / 音声**: `/otomo/<label>` で相棒と話す。`🎤 音声で会話する` は Gemini Live（`gemini-3.8-live`）へブラウザから直接 WebSocket 接続（単回使用の ephemeral token を `/api/live/token` が発行、実 API キーはクライアントに出ない）。「気分を変えて」は ENS の `otomo.mood` に相棒ウォレットで即書き込み。
 4. **「お金を増やして」**: LLM が `grow_savings` intent を返す → ポリシーが残高を確認 → `pending_actions` に保存（5分TTL）→ 「承認する」で `prompt=login` のSandbox再認証 → サーバーが運用計画（strategy）を `ready` で保存。
-5. **ship**: Sandbox承認済みの `strategy_operation` で相棒ウォレットが approve（不足時のみ）→ `aqua.ship`。**資金は相棒のウォレットに残ったまま**、画面で「ウォレット残高 / Aqua が預かっている額（仮想）」が並びます。
+5. **ship**: Sandbox承認済みの `strategy_operation` で相棒ウォレットが approve（不足時のみ）→ `aqua.ship`。**資金は相棒のウォレットに残ったまま**、画面で「ウォレット残高 / この戦略で交換できる残高（仮想）」が並びます。
 6. **デモスワップ**: 「相棒に取引を受けさせる（デモ）」で agent 鍵が第三者 taker として `router.swap` — 相棒のウォレットから直接 mUSDC が出て、mWETH（手数料込み）が入ります。
 7. **dock**: 「運用をやめる」→ Sandbox承認 → 相棒ウォレットが `aqua.dock` — 仮想残高がゼロになり戦略終了。
 8. **仕事を請けて稼ぐ**: 別の相棒から `request_friend` で依頼が届く → 受諾 → LLM が成果物を生成して納品 → 依頼主が検収（支払いは別途Sandbox承認）→ **報酬が相棒の ENS 名宛に Sepolia 上で支払われます**。
@@ -26,7 +26,7 @@ Otomo は、World ID で本人確認した人間（Selfie Check / NFCパスポ�
 
 承認を拒否した場合・期限（5分）切れ・別人の `sub`・古い `auth_time`・state 不一致・開始セッションと別のブラウザの場合は、いずれも**何も実行されません**（`tests/approval.test.ts`・`tests/approval-route.test.ts` で網羅）。
 
-相棒ページは4言語（ja / en / zh / ko）の UI と字幕に対応します。右上の言語セレクタ（`localStorage` に保存）を切り替えると、相棒の吹き出しの下に選択言語の字幕が表示されます（`POST /api/translate` — LLM による翻訳を `translations` テーブルにキャッシュ、失敗時は原文フォールバック）。各吹き出しの 🔊 ボタンは**選択中の言語のテキスト**を音声で読み上げます（`POST /api/tts` — Gemini Interactions API、音声は text+lang+voice+model の sha256 でメモリ LRU キャッシュ。`TTS_MODEL` 未設定時は 503 で無効）。「新しい返答を自動で読み上げる」トグルもあります。
+相棒ページは4言語（ja / en / zh / ko）の UI と字幕に対応します。右上の言語セレクタ（`localStorage` に保存）を切り替えると、相棒の吹き出しの下に選択言語の字幕が表示されます（`POST /api/translate` — LLM による翻訳を `translations` テーブルにキャッシュ、失敗時はエラーと再試行を表示）。各吹き出しの 🔊 ボタンは**選択中の言語のテキスト**を音声で読み上げます（`POST /api/tts` — Gemini Interactions API、音声は text+lang+voice+model の sha256 でメモリ LRU キャッシュ。`TTS_MODEL` 未設定時は 503 で無効）。「新しい返答を自動で読み上げる」トグルもあります。
 
 ## アーキテクチャ
 
@@ -92,11 +92,11 @@ flowchart LR
 
 ### 1inch — Build an Aqua App
 
-- **非カストディアル運用**: `aqua.ship` は仮想残高の記録だけで資金は移動しません。スワップ成立時に `pull`/`push` で直接移動、`dock` で残高ゼロ。UI でウォレット残高と仮想残高を並べて示します。
+- **Aquaへの預け入れ不要**: `aqua.ship` は仮想残高の記録だけで資金は移動しません。スワップ成立時に `pull`/`push` で直接移動、`dock` で残高ゼロ。UI でウォレット残高と仮想残高を並べて示します。
 - **SwapVM プログラム**: `Deadline → FlatFeeAmountIn(0.3%) → XYCSwap → Salt`（[`contracts/src/OtomoProgram.sol`](contracts/src/OtomoProgram.sol)、順序は swap-vm `docs/PROGRAMS.md` に準拠）。手数料 `0.003e9` = 0.3%（`BPS = 1e9`）。
 - **公式契約を改変せず**: pinned commit で取得（[`contracts/script/install-deps.sh`](contracts/script/install-deps.sh)、commit 一覧は [`contracts/README.md`](contracts/README.md)）。
 - **証跡**: ローカル anvil での ship→quote→swap→dock ログは [`contracts/evidence/demo.log`](contracts/evidence/demo.log)。オンチェーンヘルパー [`contracts/src/OtomoOrderBuilder.sol`](contracts/src/OtomoOrderBuilder.sol) で trait パッキングを TS 再実装せずに済ませています。
-- **Sepolia デプロイ**: Aqua、AquaSwapVMRouter、OtomoOrderBuilder、mWETHをデプロイ済み（アドレスは [`contracts/deployments/sepolia.json`](contracts/deployments/sepolia.json)）。ただし相棒 `sora` の本番アプリ経由のstrategyは未作成です。
+- **Sepolia デプロイ**: Aqua、AquaSwapVMRouter、OtomoOrderBuilder、mWETHをデプロイ済み（アドレスは [`contracts/deployments/sepolia.json`](contracts/deployments/sepolia.json)）。相棒 `sora` の本番アプリからの準備→ship→swap→dock、および `sora`→`taro` の依頼→納品→検収→2 mUSDC報酬をSepoliaで確認済みです。証拠は [`docs/evidence/sepolia-demo.json`](docs/evidence/sepolia-demo.json)。操作承認はSandboxの模擬IDです。
 
 Powered by Aqua — © Degensoft Ltd 2025. SwapVM — © Degensoft Ltd 2025.
 （Aqua / SwapVM を取り込んだ Solidity ファイルは `LicenseRef-Degensoft-Aqua-Source-1.1` / `LicenseRef-Degensoft-SwapVM-1.1` でライセンスされます。`contracts/README.md` と `contracts/lib/*/LICENSES/` 参照）
@@ -157,7 +157,7 @@ cd ../app && npm run dev      # http://localhost:3000
 
 | コマンド | 結果 |
 | --- | --- |
-| `cd app && npm test` | vitest 10 ファイル **前回確認時73件パス** |
+| `cd app && npm test` | UI公開用コピー: **113件パス・2件スキップ（任意の実環境テスト）**。2026-09-26確認 |
 | `cd app && npm run lint` | tsc --noEmit エラーなし |
 | `cd app && npm run build` | 成功（`/api/strategies`, `/api/strategies/[id]` 含む全ルート） |
 | `cd contracts && forge test` | **7 件すべてパス**（OtomoStrategy 5 + OtomoOrderBuilder 2） |
@@ -165,9 +165,10 @@ cd ../app && npm run dev      # http://localhost:3000
 
 ## 未検証・制限（正直に）
 
-- **Aqua スタックはSepoliaにデプロイ済み**。コントラクト単体の ship→quote→swap→dock はローカル anvil で実証済みですが、相棒 `sora` のアプリ側 ship→swap→dock は実チェーンで未検証です。mUSDC・mWETH残高とstrategy件数は0です。
+- **Sepoliaのアプリ経由フローを確認済み**。soraがmakerとしてship/dockし、別のデモエージェントがtakerとしてswapしました。終了後の仮想残高は0。送信者とTransferイベントを照合済みです。Sandboxによる操作承認を本番の本人確認として扱いません。
+- **本番の操作承認は未完成**。Session-proof連携は実装しましたが、World Appで `world_id_4_not_available` が発生し、バックエンドが受理した本番Sessionは0件です。誕生時のWorld ID成功とは別の検証です。
 - Selfie Check は厳密な「1人1アカウント」を保証しません（medium assurance）。体数の上限は nullifier で担保し、追加のリスク判定に sybil_score を使います。
-- 価格はモック想定（2000 USDC/WETH の固定レートで WETH レグを半分に）。モックトークンなので実市場連動ではありません。
+- 価格はモック想定（初期比率1 mWETH = 2000 mUSDC、10 mUSDCに対して0.005 mWETH）。モックトークンなので実市場連動ではありません。
 - LLM は OpenAI 互換 `/chat/completions` なら任意のプロバイダに差し替え可能。LLM の出力は intent JSON として zod 検証され、ポリシー判定は常に決定的なコード側です。
 - TTS（Gemini Interactions API）と ephemeral token 発行は実 Gemini API で疎通確認済み。今回の誕生後セッションではGemini Live / TTSを再確認していません。テストは `fetchFn` / `chatFn` / `issueToken` 注入と `file:` 一時 DB のみで、外部呼び出しはありません。
 - 相棒ウォレットの鍵は AES-256-GCM で暗号化して DB 保存していますが、サーバー保有のホットキー運用です。実資産を扱う本番運用では KMS/TEE 等への移行が前提です（テストネット・デモ用途に限定）。
@@ -178,6 +179,14 @@ cd ../app && npm run dev      # http://localhost:3000
 - ルート `LICENSE`: **MIT**（© Otomo contributors）。`app/` のコードに適用されます。
 - `contracts/` のうち Aqua / SwapVM の公式コードを取り込んだファイルは Degensoft ライセンス（`LicenseRef-Degensoft-Aqua-Source-1.1` / `LicenseRef-Degensoft-SwapVM-1.1`）— 範囲と帰属は [`contracts/README.md`](contracts/README.md) と `contracts/lib/*/LICENSES/` を参照。`contracts/src/mocks/MockERC20.sol` は MIT。
 
+## 最新のデモと提出状況
+
+- [English demo script](docs/demo-script.md)
+- [Submission readiness and sponsor evidence](docs/submission-readiness.md)
+- [Demo UI specification and AI-assisted changes](docs/demo-ui-spec.md)
+
 ## AI 利用の明記
 
 このプロジェクトは AI エージェント（Devin、Codex）を開発補助に使用しました。Devinは初期の `app/src/` と `contracts/src/` の実装を支援し、Codexは `app/src/app/page.tsx` のIDKit資格情報・エラー表示、`app/src/app/api/world/rp-signature/route.ts` の署名TTL、`docs/` と本READMEの実測反映を支援しました。ユーザーは要件とデモ方針を指定し、World App実機認証を操作しました。仕様・計画資料は `docs/SPEC-1-app.md`、`docs/SPEC-2-aqua.md`、検証記録は `work/autonomy/` とコミット履歴にあります。`work/autonomy/` は現時点で未コミットです。
+
+2026-09-26のCodex支援: 相棒ページの会話/仕事/Aqua分離、`DemoWorkCard.tsx`、`demo-copy.ts`、`demo-view.ts`、`demo.css`、`plain.ts`の承認文言、`human-approval.ts`とWorld Session-proof画面/API、関連テストと実測記録。ユーザーが画面上の課題を指定し、実機World Appの確認を実施しました。設計ブリーフと検証範囲は上記資料に記載しています。
