@@ -20,20 +20,21 @@
 - テスト 73 件全パス、tsc clean、本番ビルド成功
 - Vercel Production env 設定済み: `LLM_*`, `TTS_*`, `SEPOLIA_RPC_URL`, `COMPANION_WALLET_KEY`, `ENS_USER_REGISTRY`, `AQUA_*`, `MOCK_WETH_ADDRESS`, `WORLD_*`, `AGENT_OIDC_*` 等
 - operator 残高 ~0.12 ETH、agent に 0.02 ETH 送金済み
-- 現在のHEAD: `2f03a01`（branch `main`、`origin/main` と一致。未追跡 `app/scripts/smoke-ens.ts` は既存資産として保持）
+- この記録の開始時HEADは `bd4e618`。追加相棒と経過表示の修正はローカル `main` にコミットして本番へCLIデプロイ済み。未追跡 `app/scripts/smoke-ens.ts` は既存資産として保持。
 
-## 現在の状態（2026-09-26 12:02 JST）
+## 現在の状態（2026-09-26 13:28 JST）
 
-**実機World App認証による誕生は完了。`sora.otomo.eth` が本番DBに作成され、Sepolia ENSで解決できる。ブラウザの読み込みも完了した。**
+**実機World App認証で `sora.otomo.eth` が誕生し、認証済みセッションから2体目の `taro.otomo.eth` も誕生した。両方とも本番DBで ready、Sepolia ENSで解決できる。**
 
 - Developer Portal のアプリ `app_690ebac379aa31482fcbbb8f418ef6fc` では、RP ID `rp_35ff4cfb1b8f2769`・署名者・Action `otomo-birth` を照合済み。precheckは本番・Action active・`can_user_verify: yes`。環境変数は変更していない。Portal VerificationのApp URLが `https://docs.world.org/` なのは観測したが、今回は誕生に成功しており、失敗原因とは断定できない。
 - `@worldcoin/idkit` と core を4.3.0へ更新し、公式presetのlegacy Orbフォールバックと資格情報選択を導入。IDKitエラーコードをアプリ画面にも表示するようにした。RP署名TTLを誕生チャレンジと同じ600秒にした。旧試行では `world_id_4_not_available`、次の試行では `inclusion_proof_failed` を取得したが、後者の原因は特定できていない。最新試行は成功した。
-- 本番デプロイ `dpl_5AVbgD5rNXrRHBVfAwP8UqJbbMmg` はREADY、`otomo-world-id.vercel.app` alias付き。`/api/world/rp-signature` のTTL 600を本番で確認。ローカルの最新変更は `npm run lint` と `npm run build` 成功。73テスト成功はその前のIDKit更新時の記録で、最新変更後に全テストは再実行していない。
+- 2体目の誕生失敗はIDKitの `nullifier_replayed` で、署名APIは200だが `/api/birth` に到達していなかった。同じActionの一意性証明は再利用できないため、認証済みのsoraセッションから追加する経路を実装した。修正後の本番 `/api/birth` は200。DBではsoraとtaroの本人識別子が一致し、taroは仕事役で `birth_provisioning=ready`。登録tx `0x9285246ecb5f077d5e97c98ff0e0af45e48ad0c181252d5130c2f914e76103dc` のSepolia receiptはsuccess、ENS解決先はtaro専用ウォレット `0x47638b38c6706fb60d710396cdd672a54c9160f0` と一致した。2体目でWorld Appの再認証は行っていない。
+- 誕生画面に経過秒数とDBの処理段階（ガス供給、専用リゾルバ、ENS名登録、完了/要確認）を表示する変更を反映した。本番デプロイ `dpl_JCvs8SQPr22bADyVRZuCQgCq8abr` はREADYで `otomo-world-id.vercel.app` alias付き。`/api/birth/status` は未ログインで401。本番のtaro誕生は経過表示のデプロイ前だったため、この表示を使った実誕生の観測は未実施。ローカル `npm run lint` と `npm run build` は成功。
 - ユーザーのWorld Appは認証完了を表示。本番ログは `/api/birth` HTTP 200、`[birth] proof check { label: 'sora', ok: true }`。DB `birth_provisioning.status=ready`、登録tx `0xc79ab334111faad4ef0d46561372f2c63ecca99e0d159fd0c7f4bf58c060d926` のSepolia receiptはsuccess。ENS resolverと相棒ウォレットの解決先はDB値に一致し、`otomo.mood=calm`。
 - 相棒ページでチャット送受信を確認。人間パートナーとの紐付けと承認のissuerは `https://sandbox.auth.world.org`（模擬ID）。評判のENS公開tx `0x7b224d66805a00f3bbaf5fe384df18c147e6e6df8804d227543ed40dee9ac310` はsuccess、ENS textはDB snapshotに一致。**誕生認証は本番World ID、後続承認はSandbox**として区別する。
-- Aqua用相棒ウォレット残高はmUSDC 0・mWETH 0、strategy 0件。Live/TTS、Aquaアプリ操作、依頼/納品/支払い、動画収録は未検証。評判公開のpending actionがもう1件あるため、重複承認しない。
+- soraの相棒ウォレット残高はmUSDC 100・mWETH 0（Sepolia RPCのbalanceOfとmint tx receiptを確認）、strategy 0件。Live/TTS、Aquaアプリ操作、依頼/納品/支払い、動画収録は未検証。評判公開のpending actionがもう1件あるため、重複承認しない。
 
-実測の詳細: `work/autonomy/otomo-birth-e2e-success.json`。デモ台本は `docs/demo-script.md`。誕生済みアカウントで同じ誕生を再実演しない。画面と登録txを使って収録する。
+実測の詳細: `work/autonomy/otomo-birth-e2e-success.json`（sora）、`work/autonomy/otomo-second-birth-recovery.json`（taro）。デモ台本は `docs/demo-script.md`。soraで使った `otomo-birth` の一意性証明は再送信しない。追加相棒はログイン済みの画面から作成する。現行セッションは24時間で期限切れになり、従来の `/api/login` は同じ一意性証明を要求するため、期限後の再ログインは未解決。
 
 ## 環境・ツールの注意
 

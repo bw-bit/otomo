@@ -14,7 +14,7 @@ Otomo は、World ID で本人確認した人間（Selfie Check / NFCパスポ�
 
 ## 実装上の導線（実測できた範囲は [`docs/demo-script.md`](docs/demo-script.md)）
 
-1. **誕生**: `/` で名前を入力 → 「World IDで相棒を迎える」。World IDKit（action=`otomo-birth`, signal=サーバー発行の一度きり誕生チャレンジ、選択した資格情報）→ サーバーが `developer.world.org/api/v4/verify/{rp_id}` で検証 → nullifier 未使用を確認 → 相棒専用ウォレット生成 → ガス代を供給 → 専用 Permissioned Resolver をデプロイし `<label>.otomo.eth` を UserRegistry に登録（譲渡不可・所有者は相棒自身）。
+1. **誕生**: `/` で名前を入力 → 「World IDで相棒を迎える」。最初の相棒は World IDKit（action=`otomo-birth`, signal=サーバー発行の一度きり誕生チャレンジ、選択した資格情報）で認証し、サーバーが `developer.world.org/api/v4/verify/{rp_id}` で検証する。2体目以降は認証済み相棒へログイン中のセッションから作成する（同じActionの一意性証明は再利用できない）。サーバーは本人識別子ごとの上限を予約時に確認し、専用ウォレット生成、ガス供給、Permissioned Resolver のデプロイ、`<label>.otomo.eth` の登録を行う。
 2. **契り**: 「World ID で契りを結ぶ」→ World ID for Agents（OIDC sandbox）で初回ログイン。`sub` を相棒に紐付け、以後の承認はこの `sub` 一致が前提。
 3. **チャット / 音声**: `/otomo/<label>` で相棒と話す。`🎤 音声で会話する` は Gemini Live（`gemini-3.8-live`）へブラウザから直接 WebSocket 接続（単回使用の ephemeral token を `/api/live/token` が発行、実 API キーはクライアントに出ない）。「気分を変えて」は ENS の `otomo.mood` に相棒ウォレットで即書き込み。
 4. **「お金を増やして」**: LLM が `grow_savings` intent を返す → ポリシーが残高を確認 → `pending_actions` に保存（5分TTL）→ 「承認する」で `prompt=login` のSandbox再認証 → サーバーが運用計画（strategy）を `ready` で保存。

@@ -1,6 +1,6 @@
 # Otomo デモ台本 — 実機で確認済みの導線（約2分）
 
-収録と通しリハーサルは未実施。`sora.otomo.eth` は既に誕生済みなので、誕生の再送信ではなく、本番の相棒画面と登録トランザクションを使う。
+収録と通しリハーサルは未実施。`sora.otomo.eth` と `taro.otomo.eth` は既に誕生済みなので、誕生の再送信ではなく、本番の相棒画面と登録トランザクションを使う。
 
 | 時間 | 画面 | 実声ナレーション |
 |---|---|---|
@@ -16,5 +16,5 @@
 - 本番 `/api/birth` HTTP 200、proof check `ok: true`、DB `birth_provisioning=ready`、ENS登録tx receipt `success`。詳細は `work/autonomy/otomo-birth-e2e-success.json`。
 - チャット送受信と評判のENS公開を本番で確認。評判のissuerは `https://sandbox.auth.world.org`。本番のWorld ID for Agents承認として説明しない。
 - Live/TTS、Aquaの本番アプリ操作、依頼・納品・支払いは未実走。`contracts/evidence/demo.log` はchain ID 31337のローカル記録であり、本番Aqua統合の証拠ではない。
-- 相棒ウォレットのmUSDCとmWETHはともに0で、strategyは0件。評判公開のpending actionが別に1件あるため、録画中に再承認しない。
+- soraの相棒ウォレットはmUSDC 100・mWETH 0（Sepolia上で確認）、strategyは0件。仕事役の2体目 `taro.otomo.eth` は本人確認済みセッションから追加され、[登録tx](https://sepolia.etherscan.io/tx/0x9285246ecb5f077d5e97c98ff0e0af45e48ad0c181252d5130c2f914e76103dc) とENS解決先を確認済み。相棒間の依頼・納品・支払いは未実走。評判公開のpending actionが別に1件あるため、録画中に再承認しない。
 - セッションクッキーや秘密値を映さない。[公式動画規定](https://ethglobal.com/events/tokyo2026/info/details)では、添付動画は2〜4分、720p以上、実声が必要。携帯電話での収録・AI音声は不可。
