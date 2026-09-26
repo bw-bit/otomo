@@ -66,7 +66,9 @@ export async function completeHumanChallenge(db: Db, label: string, id: string, 
     keys=[`u:${item.nullifier}:${merkle}:${typeof item.proof==="string"?item.proof:JSON.stringify(item.proof)}`];
     binding=item.nullifier;
   }
-  if (ch.session_id && binding!==ch.session_id) throw new Error("A different World ID cannot approve this action");
+  // Enforce the stored binding only when it is a session ID; legacy nullifier
+  // bindings are upgraded to the proven session below.
+  if (ch.session_id && String(ch.session_id).startsWith("session_") && binding!==ch.session_id) throw new Error("A different World ID cannot approve this action");
   if (!await deps.verify(proof)) throw new Error("World ID production verification failed");
   const tx=await db.transaction("write");
   let action: PendingAction | undefined, companion: Companion | undefined;
@@ -80,7 +82,11 @@ export async function completeHumanChallenge(db: Db, label: string, id: string, 
       await tx.execute({sql:"INSERT INTO identity_bindings (label,issuer,verified_at) SELECT label,'https://developer.world.org',? FROM companions WHERE COALESCE(human,world_nullifier)=? ON CONFLICT(label) DO UPDATE SET issuer=excluded.issuer,verified_at=excluded.verified_at",args:[now,String(ch.human)]});
     } else {
       const bound=(await tx.execute({sql:"SELECT session_id FROM human_sessions WHERE human=?",args:[String(ch.human)]})).rows[0];
-      if (bound?.session_id!==binding) throw new Error("World ID binding changed");
+      if (bound?.session_id!==binding) {
+        if (bound && !String(bound.session_id).startsWith("session_") && binding.startsWith("session_"))
+          await tx.execute({sql:"UPDATE human_sessions SET session_id=?,verified_at=? WHERE human=?",args:[binding,now,String(ch.human)]});
+        else throw new Error("World ID binding changed");
+      }
       action=(await tx.execute({sql:"SELECT * FROM pending_actions WHERE id=? AND companion=?",args:[String(ch.action_id),label]})).rows[0] as unknown as PendingAction | undefined;
       if (!action || action.status!=="pending" || action.expires_at<=Math.max(now,Date.now()) || digest(action)!==ch.digest) throw new Error("Action changed, expired or already processed");
       companion=(await tx.execute({sql:"SELECT * FROM companions WHERE label=?",args:[label]})).rows[0] as unknown as Companion;
