@@ -9,6 +9,9 @@ import type { CompanionTraits } from "./traits";
 const bodyVertex = /* glsl */ `
 uniform float uTime;
 uniform float uWobble;
+uniform vec3 uPoke;
+uniform float uPokeAmount;
+uniform vec3 uStretch;
 varying vec3 vNormalV;
 varying vec3 vViewDir;
 void main() {
@@ -16,6 +19,10 @@ void main() {
   // Low-frequency wobble only: high frequencies read as "jelly glitch", not "alive".
   float w = sin(p.y * 3.1 + uTime * 1.3) * 0.5 + sin(p.x * 2.3 - uTime * 0.9) * 0.5;
   p += normal * w * uWobble;
+  // Press dent: a gaussian dimple around the touched point, spring-driven by uPokeAmount.
+  p -= normal * uPokeAmount * 0.28 * exp(-dot(position - uPoke, position - uPoke) * 6.0);
+  // Jelly drag: the top follows uStretch while the base (p.y=-1) stays planted.
+  p += uStretch * (p.y + 1.0) * 0.5;
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vNormalV = normalize(normalMatrix * normal);
   vViewDir = normalize(-mv.xyz);
@@ -47,9 +54,21 @@ void main() {
 
 export interface CompanionModel {
   group: THREE.Group;
+  /** Body mesh, for raycasting + converting hits into poke-space. */
+  body: THREE.Mesh;
   /** 0..1 appearance (scale-in with overshoot is applied by the caller). */
   setOpacity(o: number): void;
   setGlow(g: number): void;
+  /** Press a dent at a body-local point (unit-sphere space). */
+  poke(localPoint: THREE.Vector3): void;
+  /** Drag-stretch vector in body-local space; the caller clamps it. */
+  setStretch(v: THREE.Vector3): void;
+  /** Eyes/mouth/group lean toward the pointer, x/y in -1..1. */
+  setLook(x: number, y: number): void;
+  /** One happy jump, sprung back down. */
+  hop(): void;
+  /** Squash pose (0.18 ≈ scale y 0.82, x/z 1.1) that springs back. */
+  squash(amount: number): void;
   update(t: number, dt: number): void;
   dispose(): void;
 }
@@ -58,10 +77,25 @@ export function hsl(h: number, s: number, l: number) {
   return new THREE.Color().setHSL(h, s, l, THREE.SRGBColorSpace);
 }
 
+// Underdamped spring: k 170 / damping 8.5 gives 2-3 visible wobbles, then settles.
+const SPRING_K = 170;
+const SPRING_C = 8.5;
+const spring = (init = 0) => ({ v: init, vel: 0 });
+const stepSpring = (s: { v: number; vel: number }, target: number, dt: number, reduced: boolean) => {
+  if (reduced) {
+    s.v += (target - s.v) * (1 - Math.exp(-10 * dt));
+    s.vel = 0;
+    return;
+  }
+  s.vel += (SPRING_K * (target - s.v) - SPRING_C * s.vel) * dt;
+  s.v += s.vel * dt;
+};
+
 export function createCompanion(traits: CompanionTraits): CompanionModel {
   const group = new THREE.Group();
   const disposables: { dispose(): void }[] = [];
   const track = <T extends { dispose(): void }>(x: T) => (disposables.push(x), x);
+  const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
   const bodyMat = track(
     new THREE.ShaderMaterial({
@@ -71,6 +105,9 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
       uniforms: {
         uTime: { value: 0 },
         uWobble: { value: traits.wobble },
+        uPoke: { value: new THREE.Vector3(0, 0, 1) },
+        uPokeAmount: { value: 0 },
+        uStretch: { value: new THREE.Vector3() },
         uBase: { value: hsl(traits.hue, traits.saturation, 0.78) },
         uShade: { value: hsl((traits.hue + 0.03) % 1, traits.saturation + 0.1, 0.56) },
         uRim: { value: hsl(traits.accentHue, 0.8, 0.7) },
@@ -114,6 +151,7 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
   const hiMat = track(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true }));
   const eyeGeo = track(new THREE.SphereGeometry(1, 24, 16));
   const eyes: THREE.Mesh[] = [];
+  const eyeBase: THREE.Vector3[] = [];
   // Face features sit on the front surface of the (squashed) ellipsoid, pushed out past the wobble
   // so they never sink into the body when it breathes or turns.
   const surfaceZ = (x: number, y: number) =>
@@ -130,6 +168,7 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
     eye.add(hi);
     group.add(eye);
     eyes.push(eye);
+    eyeBase.push(eye.position.clone());
   }
 
   const blushMat = track(
@@ -155,14 +194,22 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
   const my = (traits.eyeHeight - 0.14) * traits.squash;
   mouth.position.set(0, my, surfaceZ(0, my) - 0.004);
   mouth.rotation.z = Math.PI;
+  const mouthBase = mouth.position.clone();
   group.add(mouth);
 
   const baseEyeY = traits.eyeSize * 1.15;
   let nextBlink = 1.5;
   let blinkT = -1;
 
+  // Jelly state: squash scale (per axis), poke dent amount, hop height, gaze.
+  const sx = spring(1), sy = spring(1), sz = spring(1);
+  const pokeAmt = spring(0);
+  const hopY = spring(0);
+  const look = { x: 0, y: 0, tx: 0, ty: 0 };
+
   return {
     group,
+    body,
     setOpacity(o) {
       bodyMat.uniforms.uOpacity.value = o;
       eyeMat.opacity = o;
@@ -172,13 +219,58 @@ export function createCompanion(traits: CompanionTraits): CompanionModel {
     setGlow(g) {
       bodyMat.uniforms.uGlow.value = g;
     },
+    poke(localPoint) {
+      bodyMat.uniforms.uPoke.value.copy(localPoint);
+      pokeAmt.v = 1;
+      pokeAmt.vel = 0;
+    },
+    setStretch(v) {
+      bodyMat.uniforms.uStretch.value.copy(v);
+    },
+    setLook(x, y) {
+      look.tx = Math.max(-1, Math.min(1, x));
+      look.ty = Math.max(-1, Math.min(1, y));
+    },
+    hop() {
+      hopY.vel += reduced ? 0 : 4.2;
+      if (reduced) hopY.v = 0.25;
+    },
+    squash(amount) {
+      sy.v = 1 - amount;
+      sx.v = sz.v = 1 + amount * 0.6;
+      sx.vel = sy.vel = sz.vel = 0;
+    },
     update(t, dt) {
       bodyMat.uniforms.uTime.value = t;
+
+      stepSpring(sx, 1, dt, !!reduced);
+      stepSpring(sy, 1, dt, !!reduced);
+      stepSpring(sz, 1, dt, !!reduced);
+      stepSpring(pokeAmt, 0, dt, !!reduced);
+      stepSpring(hopY, 0, dt, !!reduced);
+      bodyMat.uniforms.uPokeAmount.value = pokeAmt.v;
+
+      const ease = reduced ? 1 : 1 - Math.exp(-9 * dt);
+      look.x += (look.tx - look.x) * ease;
+      look.y += (look.ty - look.y) * ease;
+
       // Breathing: never fully still, otherwise it reads as frozen.
       const breath = Math.sin(t * 1.6) * 0.018;
-      group.scale.set(1 + breath, 1 - breath, 1 + breath);
-      group.position.y = Math.sin(t * 0.8) * 0.06;
-      group.rotation.y = Math.sin(t * 0.35) * 0.18;
+      group.scale.set((1 + breath) * sx.v, (1 - breath) * sy.v, (1 + breath) * sz.v);
+      group.position.y = Math.sin(t * 0.8) * 0.06 + hopY.v;
+      group.rotation.y = Math.sin(t * 0.35) * 0.18 + look.x * 0.35;
+      group.rotation.x = -look.y * 0.12;
+
+      for (let i = 0; i < eyes.length; i++) {
+        eyes[i].position.x = eyeBase[i].x + look.x * 0.06;
+        eyes[i].position.y = eyeBase[i].y + look.y * 0.06;
+        const hi = eyes[i].children[0];
+        hi.position.x = -0.35 + look.x * 0.12;
+        hi.position.y = 0.4 + look.y * 0.12;
+      }
+      mouth.position.x = mouthBase.x + look.x * 0.05;
+      mouth.position.y = mouthBase.y + look.y * 0.05;
+
       // Blink every 2.5–5.5s, 140ms close/open.
       nextBlink -= dt;
       if (nextBlink <= 0 && blinkT < 0) blinkT = 0;

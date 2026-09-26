@@ -2,15 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { IDKitErrorCodes, IDKitRequestWidget, mnc, passport, proofOfHuman, selfieCheck, setDebug, type IDKitResult, type RpContext } from "@worldcoin/idkit";
+import { IDKitErrorCodes, IDKitRequestWidget, proofOfHuman, setDebug, type IDKitResult, type RpContext } from "@worldcoin/idkit";
 import { BirthScene, type BirthPhase } from "@/components/BirthScene";
 import { BIRTH_ACTION } from "@/lib/birth";
+import { birthStageProgress, birthStageText } from "@/lib/plain";
 
 setDebug(true);
 
 const APP_ID = process.env.NEXT_PUBLIC_WORLD_APP_ID as `app_${string}` | undefined;
 const WORLD_ENV = (process.env.NEXT_PUBLIC_WORLD_ENV ?? "staging") as "production" | "staging" | "sandbox";
-type BirthCredential = "human" | "passport" | "mnc" | "selfie";
+const PARENT = "otomo.eth";
+const LABEL_RE = /^[a-z0-9-]{3,20}$/;
 
 interface Born {
   label: string;
@@ -21,19 +23,9 @@ interface Born {
   personality: { firstPerson: string; tone: string; strengths: string[]; catchphrase: string };
 }
 
-const BIRTH_PROGRESS: Record<string, string> = {
-  preparing: "本人確認済みの相棒を照合し、性格を作成しています",
-  funding: "相棒のウォレットへSepoliaのガス代を送っています",
-  deploying_resolver: "相棒専用のENSリゾルバを登録しています",
-  registering_name: "ENS名を登録し、トランザクションの確定を待っています",
-  ready: "ENS登録が完了しました。画面を更新しています",
-  needs_review: "ENS登録の確認が必要です",
-};
-
 export default function BirthPage() {
   const [label, setLabel] = useState("");
   const [hint, setHint] = useState("");
-  const [credential, setCredential] = useState<BirthCredential>("human");
   const [role, setRole] = useState<"personal" | "work">("personal");
   const [phase, setPhase] = useState<BirthPhase>("idle");
   const [rp, setRp] = useState<RpContext | null>(null);
@@ -46,6 +38,7 @@ export default function BirthPage() {
   const [verifiedCompanion, setVerifiedCompanion] = useState<string | null>(null);
   const [birthStage, setBirthStage] = useState("preparing");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [pokeNonce, setPokeNonce] = useState(0);
   useEffect(() => {
     fetch("/api/companions/mine").then(async (res) => {
       if (res.ok) {
@@ -67,7 +60,7 @@ export default function BirthPage() {
         const res = await fetch(`/api/birth/status?label=${encodeURIComponent(label)}`, { cache: "no-store" });
         if (res.ok && active) {
           const data = await res.json();
-          if (typeof data.status === "string" && BIRTH_PROGRESS[data.status]) setBirthStage(data.status);
+          if (typeof data.status === "string") setBirthStage(data.status);
         }
       } catch { /* The request can continue while a progress poll fails. */ }
     };
@@ -121,65 +114,127 @@ export default function BirthPage() {
   };
   const handleVerify = (result: IDKitResult) => submitBirth(result, false);
 
+  const goExisting = async () => {
+    if (verifiedCompanion) {
+      window.location.href = `/otomo/${verifiedCompanion}`;
+      return;
+    }
+    setMode("login");
+    setError(null);
+  };
+
+  const validLabel = LABEL_RE.test(label);
+  const previewSeed = mode === "birth" && validLabel ? `${label}.${PARENT}` : null;
+  const working = phase === "verifying" || phase === "forming";
+
   return (
     <main className="stage">
-      <BirthScene className="scene" phase={phase} seed={born?.fullName ?? (phase === "forming" ? `${label}` : null)} />
+      <BirthScene className="scene" phase={phase} seed={born?.fullName ?? previewSeed} previewSeed={previewSeed} pokeNonce={pokeNonce} />
       <div />
       <section className="panel">
         {!born ? (
-          <>
-            <h1>世界に一人の相棒を迎える</h1>
-            <p>World ID の本人確認（Proof of Human・Orb・Selfie・パスポート・マイナンバーカードのいずれか）で相棒が生まれます。同じ認証識別子で作れる相棒は最大3体です（個人・仕事など役割ごとに）。画像や文書の中身は受け取らず、検証結果と重複防止用の識別子だけを保存します。</p>
-            {verifiedCompanion && <p>{verifiedCompanion} の本人確認済みセッションで相棒を追加できます。World Appでの再認証は不要です。</p>}
-            <p>ウォレット接続は不要です。相棒はSepolia上の専用テストウォレットを持ちます。</p>
-            <div className="row"><button className="ghost" disabled={phase === "verifying" || phase === "forming"} onClick={() => setMode(mode === "birth" ? "login" : "birth")}>{mode === "birth" ? "すでに相棒がいる方はこちら" : "新しい相棒を迎える"}</button></div>
-            {mode === "birth" && <>
-                <div className="row">
-                  <input placeholder="相棒の名前（英小文字・数字・-）" value={label} onChange={(e) => setLabel(e.target.value.toLowerCase())} maxLength={20} disabled={phase === "forming" || phase === "verifying"} />
+          mode === "birth" ? (
+            <>
+              <h1>あなただけの相棒が生まれます</h1>
+              <p>スマホの World App でかんたん本人確認。</p>
+              {verifiedCompanion && <p>{verifiedCompanion} と一緒に暮らす仲間を迎えます（本人確認は不要）</p>}
+              <div className="row">
+                <input
+                  placeholder="名前（英小文字・数字）"
+                  value={label}
+                  onChange={(e) => { setLabel(e.target.value.toLowerCase()); setPokeNonce((n) => n + 1); }}
+                  maxLength={20}
+                  disabled={working}
+                />
+              </div>
+              {previewSeed && <p className="small">名前で姿が変わるよ</p>}
+              <div className="row">
+                <input
+                  placeholder="どんな子がいい？（例: のんびり、しっかり者）"
+                  value={hint}
+                  onChange={(e) => setHint(e.target.value)}
+                  maxLength={200}
+                  disabled={working}
+                />
+              </div>
+              <div className="row" role="radiogroup" aria-label="相棒の役割">
+                <button type="button" className={`rolecard${role === "personal" ? " selected" : ""}`} onClick={() => setRole("personal")} disabled={working} aria-pressed={role === "personal"}>
+                  <b>くらしの相棒</b>
+                  <small>話し相手・秘書・おさいふ番</small>
+                </button>
+                <button type="button" className={`rolecard${role === "work" ? " selected" : ""}`} onClick={() => setRole("work")} disabled={working} aria-pressed={role === "work"}>
+                  <b>しごとの相棒</b>
+                  <small>頼まれた仕事をして届ける</small>
+                </button>
+              </div>
+              {phase === "verifying" && <p role="status">スマホの World App で確認してね</p>}
+              {phase === "forming" && (
+                <div role="status" aria-live="polite">
+                  <p>{birthStageText(birthStage)}</p>
+                  <div className="progress"><div style={{ width: `${Math.round(birthStageProgress(birthStage) * 100)}%` }} /></div>
+                  <p className="small">{elapsedSeconds} 秒経過</p>
                 </div>
-                <div className="row">
-                  <input placeholder="どんな相棒がいい？（任意）" value={hint} onChange={(e) => setHint(e.target.value)} maxLength={200} disabled={phase === "forming" || phase === "verifying"} />
+              )}
+              <div className="row">
+                <button onClick={start} disabled={!validLabel || working}>
+                  {phase === "forming" ? "生まれています…" : verifiedCompanion ? "仲間を迎える" : "サインアップ"}
+                </button>
+              </div>
+              {error && (
+                <div>
+                  <p className="ng">うまくいきませんでした。もう一度ためしてね</p>
+                  <details className="plain"><summary>くわしく</summary><p className="mono">{error}</p></details>
                 </div>
-                <div className="row">
-                  <select className="credential-select" aria-label="相棒の役割" value={role} onChange={(e) => setRole(e.target.value === "work" ? "work" : "personal")} disabled={phase === "verifying" || phase === "forming"}>
-                    <option value="personal">個人（秘書・会話・支払い）</option>
-                    <option value="work">仕事（依頼を受けて納品）</option>
-                  </select>
+              )}
+              {reservedLabel && <Link href={`/otomo/${reservedLabel}`}>保存された相棒の状態を確認する</Link>}
+              <p className="small" style={{ marginTop: 18 }}>
+                <button className="linklike" onClick={() => void goExisting()}>作成済みの方はこちら</button>
+              </p>
+            </>
+          ) : (
+            <>
+              <h1>おかえりなさい</h1>
+              <p>World ID でログインすると、あなたの相棒に会えます。</p>
+              {phase === "verifying" && <p role="status">スマホの World App で確認してね</p>}
+              {phase === "forming" && (
+                <div role="status" aria-live="polite">
+                  <p>おうちを探しています…</p>
+                  <div className="progress"><div style={{ width: "70%" }} /></div>
+                  <p className="small">{elapsedSeconds} 秒経過</p>
                 </div>
-            </>}
-            <div className="row">
-              <select className="credential-select" aria-label="World IDの資格情報" value={credential} onChange={(e) => setCredential(e.target.value as BirthCredential)} disabled={phase === "verifying" || phase === "forming"}>
-                <option value="human">Proof of Human / Orb</option>
-                <option value="passport">パスポート</option>
-                <option value="mnc">マイナンバーカード</option>
-                <option value="selfie">Selfie Check</option>
-              </select>
-            </div>
-            {phase === "forming" && <div role="status" aria-live="polite">
-              <p>{BIRTH_PROGRESS[birthStage]}</p>
-              <p>経過 {elapsedSeconds} 秒。ENSの登録確認まで数分かかる場合があります。</p>
-            </div>}
-                <div className="row">
-                  <button onClick={start} disabled={(mode === "birth" && label.length < 3) || phase === "verifying" || phase === "forming"}>
-                    {phase === "forming" ? "生まれています…" : mode === "login" ? "World IDで相棒に会う" : verifiedCompanion ? "本人確認済みで相棒を追加" : "World IDで相棒を迎える"}
-                  </button>
+              )}
+              <div className="row">
+                <button onClick={start} disabled={working}>{phase === "forming" ? "まっています…" : "World IDでログイン"}</button>
+              </div>
+              {error && (
+                <div>
+                  <p className="ng">うまくいきませんでした。もう一度ためしてね</p>
+                  <details className="plain"><summary>くわしく</summary><p className="mono">{error}</p></details>
                 </div>
-            {error && <p className="ng">{error}</p>}
-            {reservedLabel && <Link href={`/otomo/${reservedLabel}`}>保存された相棒の状態を確認する</Link>}
-          </>
+              )}
+              {reservedLabel && <Link href={`/otomo/${reservedLabel}`}>保存された相棒の状態を確認する</Link>}
+              <p className="small" style={{ marginTop: 18 }}>
+                <button className="linklike" onClick={() => { setMode("birth"); setError(null); }}>新しく作る</button>
+              </p>
+            </>
+          )
         ) : (
           <>
-            <h1>{born.fullName}</h1>
-            <p>「{born.personality.catchphrase}」 — 一人称「{born.personality.firstPerson}」、{born.personality.tone}</p>
-            <p>得意なこと: {born.personality.strengths.join("、")}</p>
-            <p>
-              この名前は譲渡できません。
-              <a href={`https://sepolia.etherscan.io/tx/${born.registerTx}`} target="_blank" rel="noreferrer">登録トランザクション</a>
-            </p>
+            <h1>{born.label}</h1>
+            <div className="roombubble show" style={{ position: "static", transform: "none", maxWidth: "100%" }}>{born.personality.catchphrase}</div>
+            <p>{born.personality.tone}</p>
             <div className="row">
-              <a href="/api/auth/start?kind=bind"><button>World ID で契りを結ぶ</button></a>
-              <Link href={`/otomo/${born.label}`}><button className="ghost">相棒と話す</button></Link>
+              <Link href={`/otomo/${born.label}`}><button>会いにいく</button></Link>
             </div>
+            <details className="plain" style={{ marginTop: 14 }}>
+              <summary>くわしく</summary>
+              <p className="small">
+                {born.fullName} — この名前は譲渡できません。
+                {born.registerTx && (
+                  <a href={`https://sepolia.etherscan.io/tx/${born.registerTx}`} target="_blank" rel="noreferrer">登録トランザクション</a>
+                )}
+              </p>
+            </details>
             {error && <p className="ng">{error}</p>}
           </>
         )}
@@ -192,9 +247,9 @@ export default function BirthPage() {
           app_id={APP_ID}
           action={BIRTH_ACTION}
           rp_context={rp}
-          allow_legacy_proofs={credential !== "selfie"}
+          allow_legacy_proofs={true}
           environment={WORLD_ENV}
-          preset={credential === "human" ? proofOfHuman({ signal }) : credential === "passport" ? passport({ signal }) : credential === "mnc" ? mnc({ signal }) : selfieCheck({ signal })}
+          preset={proofOfHuman({ signal })}
           handleVerify={handleVerify}
           onSuccess={() => setOpen(false)}
           onError={(code, report) => {

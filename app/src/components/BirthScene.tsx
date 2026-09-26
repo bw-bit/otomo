@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { createBirthParticles, createFlash } from "@/three/birthParticles";
 import { createCompanion, hsl, type CompanionModel } from "@/three/companionModel";
+import { createPetting, petLine } from "@/three/petting";
+import { createSparkles } from "@/three/sparkles";
 import { mulberry32, traitsFromSeed, type CompanionTraits } from "@/three/traits";
 
 export type BirthPhase = "idle" | "verifying" | "forming" | "born" | "failed";
@@ -12,6 +14,10 @@ interface Props {
   phase: BirthPhase;
   /** Seed that makes this companion one of a kind (e.g. its ENS name). Required for "born". */
   seed: string | null;
+  /** Live preview while a name is being typed: same seed → the reveal matches. */
+  previewSeed?: string | null;
+  /** Bump on each keystroke to nudge the preview (small jelly bounce). */
+  pokeNonce?: number;
   className?: string;
 }
 
@@ -33,12 +39,19 @@ const easeOutBack = (x: number) => {
   return 1 + (c1 + 1) * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 };
 
-export function BirthScene({ phase, seed, className }: Props) {
+const PREVIEW_OPACITY = 0.35;
+const PREVIEW_GLOW = 0.3;
+
+export function BirthScene({ phase, seed, previewSeed = null, pokeNonce = 0, className }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef(phase);
   const seedRef = useRef(seed);
+  const previewSeedRef = useRef(previewSeed);
+  const pokeNonceRef = useRef(pokeNonce);
   phaseRef.current = phase;
   seedRef.current = seed;
+  previewSeedRef.current = previewSeed;
+  pokeNonceRef.current = pokeNonce;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -92,9 +105,14 @@ export function BirthScene({ phase, seed, className }: Props) {
     rig.add(motes);
     let moteCount = 0;
 
+    const sparkles = createSparkles();
+    sparkles.setPixelRatio(renderer.getPixelRatio());
+    scene.add(sparkles.points);
+
     let companion: CompanionModel | null = null;
     let companionSeed: string | null = null;
     let traits: CompanionTraits | null = null;
+    let lastPoke = pokeNonceRef.current;
 
     const mountCompanion = (s: string) => {
       if (companion) {
@@ -111,6 +129,7 @@ export function BirthScene({ phase, seed, className }: Props) {
       particles.uniforms.uColorA.value.copy(hsl(traits.hue, 0.7, 0.8));
       particles.uniforms.uColorB.value.copy(hsl(traits.accentHue, 0.75, 0.78));
       moteMat.uniforms.uColor.value.copy(hsl(traits.accentHue, 0.85, 0.72));
+      sparkles.setColor(hsl(traits.accentHue, 0.85, 0.78));
       moteCount = Math.min(traits.orbitCount, MAX_MOTES);
       moteGeo.setDrawRange(0, moteCount);
     };
@@ -128,12 +147,30 @@ export function BirthScene({ phase, seed, className }: Props) {
     ro.observe(host);
     resize();
 
-    const pointer = new THREE.Vector2();
-    const onPointer = (e: PointerEvent) => {
+    const spawnPetBubble = (worldPoint: THREE.Vector3) => {
+      const p = worldPoint.clone().project(camera);
       const r = host.getBoundingClientRect();
-      pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, ((e.clientY - r.top) / r.height) * 2 - 1);
+      const el = document.createElement("div");
+      el.className = "petbubble";
+      el.textContent = petLine();
+      el.style.left = `${((p.x + 1) / 2) * r.width}px`;
+      el.style.top = `${((1 - p.y) / 2) * r.height - 70}px`;
+      host.appendChild(el);
+      window.setTimeout(() => el.remove(), 1300);
     };
-    if (!reduced) host.addEventListener("pointermove", onPointer);
+
+    const petting = createPetting({
+      dom: renderer.domElement,
+      camera,
+      targets: () => {
+        const c = companion as CompanionModel | null;
+        return phaseRef.current === "born" && c ? [{ object: c.group, model: c }] : [];
+      },
+      onTap: (_t, worldPoint) => {
+        sparkles.burst(worldPoint.clone().add(new THREE.Vector3(0, 0.7, 0)));
+        spawnPetBubble(worldPoint);
+      },
+    });
 
     const s = { gather: 0, swirl: 0, swirlSpeed: 0.12, fail: 0, fade: 0, burst: 0, appear: 0, bornAt: -1, lastPhase: phaseRef.current as BirthPhase };
     const clock = new THREE.Clock();
@@ -143,7 +180,28 @@ export function BirthScene({ phase, seed, className }: Props) {
       const t = clock.elapsedTime;
       const ph = phaseRef.current;
 
-      if (seedRef.current && seedRef.current !== companionSeed && (ph === "forming" || ph === "born")) mountCompanion(seedRef.current);
+      // The preview keeps the same seed the born companion will use, so the reveal matches.
+      const mountSeed =
+        ph === "born" || ph === "forming"
+          ? (seedRef.current ?? previewSeedRef.current)
+          : ph === "idle" || ph === "verifying" || ph === "failed"
+            ? previewSeedRef.current
+            : null;
+      if (mountSeed && mountSeed !== companionSeed) mountCompanion(mountSeed);
+      if (!mountSeed && companion) {
+        rig.remove(companion.group);
+        companion.dispose();
+        companion = null;
+        companionSeed = null;
+      }
+      if (pokeNonceRef.current !== lastPoke) {
+        lastPoke = pokeNonceRef.current;
+        if (companion && ph !== "born") {
+          companion.squash(0.1);
+          companion.poke(new THREE.Vector3((Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.6, 1));
+        }
+      }
+
       if (ph !== s.lastPhase) {
         if (ph === "born") s.bornAt = t;
         if (ph !== "born") s.bornAt = -1;
@@ -174,13 +232,27 @@ export function BirthScene({ phase, seed, className }: Props) {
 
       const c = companion as CompanionModel | null;
       if (c) {
-        s.appear = tb >= 0 ? (reduced ? Math.min(1, tb / 0.4) : easeOutBack((tb - 0.08) / 0.9)) : damp(s.appear, 0, 6, dt);
+        const previewing = ph === "idle" || ph === "verifying" || ph === "failed" || ph === "forming";
+        if (previewing) {
+          // Translucent, gently pulsing silhouette: the ghost of the companion to come.
+          const pulse = ph === "forming" ? Math.sin(t * 5.2) * 0.03 : Math.sin(t * 2.4) * 0.02;
+          s.appear = damp(s.appear, 1 + pulse, 5, dt);
+          c.setOpacity(PREVIEW_OPACITY + (ph === "forming" ? Math.sin(t * 5.2) * 0.08 : 0));
+          c.setGlow(PREVIEW_GLOW + (ph === "forming" ? Math.sin(t * 5.2) * 0.15 : 0));
+          s.bornAt = -1;
+        } else {
+          s.appear = tb >= 0 ? (reduced ? Math.min(1, tb / 0.4) : easeOutBack((tb - 0.08) / 0.9)) : damp(s.appear, 0, 6, dt);
+          c.setOpacity(Math.min(1, Math.max(s.appear, 0) * 1.4));
+          c.setGlow(tb >= 0 ? Math.exp(-tb * 2.2) * 0.6 : 0);
+        }
         const k = s.appear;
-        c.update(t, dt);
+        // Faster pulse while forming makes the silhouette feel eager.
+        c.update(ph === "forming" ? t * 1.8 : t, dt);
         c.group.scale.multiplyScalar(Math.max(k, 0));
-        c.setOpacity(Math.min(1, Math.max(k, 0) * 1.4));
-        c.setGlow(tb >= 0 ? Math.exp(-tb * 2.2) * 0.6 : 0);
       }
+
+      petting.update(dt);
+      sparkles.update(dt);
 
       moteMat.uniforms.uOpacity.value = tb >= 0 ? easeOutCubic((tb - 0.6) / 0.8) * 0.85 : damp(moteMat.uniforms.uOpacity.value, 0, 5, dt);
       for (let i = 0; i < moteCount; i++) {
@@ -191,8 +263,8 @@ export function BirthScene({ phase, seed, className }: Props) {
       moteGeo.attributes.position.needsUpdate = true;
 
       // Subtle parallax only; the camera never orbits on its own.
-      camera.position.x = damp(camera.position.x, pointer.x * 0.35, 3, dt);
-      camera.position.y = damp(camera.position.y, 0.25 - pointer.y * 0.2, 3, dt);
+      camera.position.x = damp(camera.position.x, petting.pointer.x * 0.35, 3, dt);
+      camera.position.y = damp(camera.position.y, 0.25 + petting.pointer.y * 0.2, 3, dt);
       camera.lookAt(0, 0.3, 0);
       flash.mesh.quaternion.copy(camera.quaternion);
       flash.mesh.position.y = rig.position.y;
@@ -203,14 +275,16 @@ export function BirthScene({ phase, seed, className }: Props) {
     return () => {
       renderer.setAnimationLoop(null);
       ro.disconnect();
-      host.removeEventListener("pointermove", onPointer);
+      petting.dispose();
       particles.dispose();
       flash.dispose();
+      sparkles.dispose();
       moteGeo.dispose();
       moteMat.dispose();
       (companion as CompanionModel | null)?.dispose();
       renderer.dispose();
       renderer.domElement.remove();
+      host.querySelectorAll(".petbubble").forEach((el) => el.remove());
     };
   }, []);
 

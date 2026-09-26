@@ -7,10 +7,11 @@ import { useAccount, useConnect, usePublicClient, useWriteContract } from "wagmi
 import { ReputationCard } from "@/components/ReputationCard";
 import { LiveTalk } from "@/components/LiveTalk";
 import type { ReputationSnapshot } from "@/lib/reputation";
-import { CompanionAvatar } from "@/components/CompanionAvatar";
+import { CompanionRoom } from "@/components/CompanionRoom";
 import { ENS_SEPOLIA, erc20Abi } from "@/lib/ens";
 import { aquaAbi } from "@/lib/aquaAbi";
-import { LANG_LABELS, LANG_LOCALES, SUPPORTED_LANGS, isLang, t, type Lang, type UiKey } from "@/lib/i18n";
+import { LANG_LABELS, LANG_LOCALES, SUPPORTED_LANGS, isLang, t, type Lang } from "@/lib/i18n";
+import { intentPlainText, requestStatusText } from "@/lib/plain";
 
 interface Action { id: string; intent: string; amount_usdc: number; status: string; reason: string | null; tx_hash: string | null; expires_at: number }
 interface FriendReq { content?: string; reviewed_at?: number; reward_action_id?: string; id: string; from_label: string; to_label: string; task: string; reward_usdc: number; status: string }
@@ -38,13 +39,6 @@ interface StratState {
   strategies: StrategyRow[];
 }
 
-const INTENT_KEYS: Record<string, UiKey> = {
-  send_usdc: "intentSend",
-  request_friend: "intentFriend",
-  private_task: "intentPrivate",
-  grow_savings: "intentGrow",
-};
-
 const subKey = (lang: Lang, content: string) => `${lang}:${content}`;
 
 interface PeerCompanion { label: string; full_name: string; role: "personal" | "work"; skills?: string[] }
@@ -64,10 +58,14 @@ export default function CompanionPage() {
   const [lang, setLang] = useState<Lang>("ja");
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [speaking, setSpeaking] = useState<number | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [, setSubsTick] = useState(0);
   const subsMap = useRef(new Map<string, string>());
   const subsPending = useRef(new Set<string>());
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const detailsRef = useRef<HTMLElement | null>(null);
   const langRef = useRef(lang);
   const autoSpeakRef = useRef(autoSpeak);
   const prevMsgCount = useRef(-1);
@@ -318,60 +316,72 @@ export default function CompanionPage() {
   if (!s) return <main className="stage"><section className="panel"><p>{t("loading", lang)}</p></section></main>;
 
   const pending = s.actions.filter((a) => a.status === "pending" && a.expires_at > Date.now());
+  const roomCompanions = (mine.length ? mine : [{ label: s.label, full_name: s.fullName, role: s.role }]).map((m) => ({ label: m.label, full_name: m.full_name, role: m.role }));
+  const lastAssistant = [...s.messages].reverse().find((m) => m.role === "assistant")?.content;
+  const openDetails = () => {
+    setMenuOpen(false);
+    setDetailsOpen(true);
+    setTimeout(() => detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), 50);
+  };
 
   return (
-    <main className="stage" style={{ gridTemplateRows: "38vh auto" }}>
-      <CompanionAvatar seed={s.fullName} className="scene" />
-      <div style={{ height: "38vh" }} />
+    <main className="stage" style={{ gridTemplateRows: "52vh auto" }}>
+      <CompanionRoom
+        className="roomscene"
+        companions={roomCompanions}
+        current={s.label}
+        onSelect={(l) => void switchTo(l)}
+        bubble={lastAssistant}
+        thinking={busy}
+      />
+      {mine.length < 3 && <a className="plusbtn" href="/" aria-label="新しい相棒を迎える" style={{ top: "calc(52vh - 66px)" }}>＋</a>}
+      <div className="menuwrap">
+        <button className="menubtn" aria-label="メニュー" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>≡</button>
+        {menuOpen && (
+          <div className="menupop">
+            <label className="small" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {t("language", lang)}
+              <select
+                className="langsel"
+                value={lang}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  if (isLang(next)) {
+                    setLang(next);
+                    localStorage.setItem("otomo.lang", next);
+                  }
+                }}
+              >
+                {SUPPORTED_LANGS.map((l) => <option key={l} value={l}>{LANG_LABELS[l]}</option>)}
+              </select>
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={autoSpeak}
+                onChange={(e) => {
+                  setAutoSpeak(e.target.checked);
+                  localStorage.setItem("otomo.autospeak", e.target.checked ? "1" : "0");
+                }}
+              />
+              返事を読み上げる
+            </label>
+            <button className="ghost small" onClick={openDetails}>くわしく</button>
+            <a href={`/profile/${s.label}`}><button className="ghost small" style={{ width: "100%" }}>公開プロフィール</button></a>
+            <button className="ghost small" onClick={async () => { await fetch("/api/logout", { method: "POST" }); window.location.href = "/"; }}>ログアウト</button>
+          </div>
+        )}
+      </div>
+      <div />
       <section className="panel">
-        <div className="langbar">
-          <select
-            className="langsel"
-            value={lang}
-            aria-label={t("language", lang)}
-            onChange={(e) => {
-              const next = e.target.value;
-              if (isLang(next)) {
-                setLang(next);
-                localStorage.setItem("otomo.lang", next);
-              }
-            }}
-          >
-            {SUPPORTED_LANGS.map((l) => <option key={l} value={l}>{LANG_LABELS[l]}</option>)}
-          </select>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={autoSpeak}
-              onChange={(e) => {
-                setAutoSpeak(e.target.checked);
-                localStorage.setItem("otomo.autospeak", e.target.checked ? "1" : "0");
-              }}
-            />
-            {t("autoSpeak", lang)}
-          </label>
-        </div>
-        <h1>{s.fullName} <small>· {ROLE_LABEL[s.role]}</small></h1>
-        <div className="row">
-          <span>わたしの相棒:</span>
-          {mine.map((m) => (
-            <button key={m.label} className="ghost" disabled={m.label === s.label} onClick={() => void switchTo(m.label)}>{m.label}（{ROLE_LABEL[m.role]}）</button>
-          ))}
-          <a href="/"><button className="ghost">新しい相棒を迎える</button></a>
-        </div>
-        <button className="ghost" onClick={async () => { await fetch("/api/logout", { method: "POST" }); window.location.href = "/"; }}>ログアウト</button>
-        {s.provisioning && s.provisioning.status !== "ready" && <p className="ng">ENS登録: {s.provisioning.status}。{s.provisioning.error}</p>}
-        <ReputationCard snapshot={s.reputation} managed={s.managed} />
-        <p>
-          {t("moodLabel", lang)}: <b>{s.ens.mood ?? t("unset", lang)}</b> ／ {t("resolveTo", lang)}:{" "}
-          <span className="mono">{s.ens.address ?? t("unresolved", lang)}</span>
-        </p>
+        <h1>{s.label} <small className="small">· {ROLE_LABEL[s.role]}</small></h1>
+        {s.provisioning && s.provisioning.status !== "ready" && <p className="ng">準備中です: {s.provisioning.status}</p>}
         {authResult === "ok" && <p>{t("approved", lang)}</p>}
         {authResult === "ng" && <p className="ng">{t("rejected", lang)}: {authReason}</p>}
         {!s.bound && (
           <div className="card">
-            <p>{t("notBound", lang)}</p>
-            <a href="/api/auth/start?kind=bind"><button>{t("bind", lang)}</button></a>
+            <p>大事なお願い（お金や外部への依頼）を聞けるように、あなたと約束しよう</p>
+            <a href="/api/auth/start?kind=bind"><button>約束する</button></a>
           </div>
         )}
 
@@ -398,7 +408,7 @@ export default function CompanionPage() {
           })}
         </div>
         <div className="row">
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && send()} placeholder={t("placeholder", lang)} />
+          <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && send()} placeholder={t("placeholder", lang)} />
           <button onClick={send} disabled={busy}>{busy ? "…" : t("send", lang)}</button>
         </div>
         <LiveTalk label={s.label} lang={lang} />
@@ -407,12 +417,11 @@ export default function CompanionPage() {
 
         {pending.map((a) => {
           const intent = JSON.parse(a.intent);
-          const intentKey = INTENT_KEYS[intent.type];
           return (
             <div className="card" key={a.id}>
-              <p><b>{intentKey ? t(intentKey, lang) : intent.type}</b> {a.amount_usdc > 0 && `${a.amount_usdc} USDC`}</p>
-              <p className="mono">{JSON.stringify(intent)}</p>
-              <a href={`/api/auth/start?kind=approve&action=${a.id}`}><button disabled={!s.bound}>{t("approveFace", lang)}</button></a>
+              <p><b>{intentPlainText(intent)}</b></p>
+              <a href={`/api/auth/start?kind=approve&action=${a.id}`}><button disabled={!s.bound}>いいよ（本人確認）</button></a>
+              <details className="plain"><summary>くわしく</summary><p className="mono">{JSON.stringify(intent)}</p></details>
             </div>
           );
         })}
@@ -456,49 +465,41 @@ export default function CompanionPage() {
                   </>
                 )}
                 {st.status === "docked" && <p>{t("closed", lang)}</p>}
-                <p>
-                  {st.ship_tx && <a href={`https://sepolia.etherscan.io/tx/${st.ship_tx}`} target="_blank" rel="noreferrer">ship tx</a>}
-                  {st.ship_tx && st.dock_tx && " / "}
-                  {st.dock_tx && <a href={`https://sepolia.etherscan.io/tx/${st.dock_tx}`} target="_blank" rel="noreferrer">dock tx</a>}
-                </p>
               </div>
             ))}
           </>
         )}
 
-        {s.actions.filter((a) => a.status !== "pending").slice(0, 5).map((a) => (
-          <p key={a.id} className={a.status === "executed" ? "" : "ng"}>
-            {a.reason === "executing" ? "処理中" : a.reason === "confirmation_pending" ? "チェーンでの確定を確認中" : a.status}: {a.reason === "executing" || a.reason === "confirmation_pending" ? "" : a.reason ?? ""}{" "}
-            {a.tx_hash && <a href={`https://sepolia.etherscan.io/tx/${a.tx_hash}`} target="_blank" rel="noreferrer">tx</a>}
-          </p>
-        ))}
-
-        {s.inbox.length > 0 && <h1 style={{ fontSize: 16, marginTop: 16 }}>{t("inbox", lang)}</h1>}
-        {s.inbox.map((r) => (
+        {s.inbox.length > 0 && s.role === "work" && <h1 style={{ fontSize: 16, marginTop: 16 }}>お仕事の依頼</h1>}
+        {s.role === "work" && s.inbox.map((r) => (
           <div className="card" key={r.id}>
-            <p>{t("inboxItem", lang, { from: r.from_label, task: r.task, reward: r.reward_usdc, status: r.status })}</p>
-            {r.status === "open" && s.role === "work" && <button onClick={() => updateReq(r.id, "accepted")}>{t("accept", lang)}</button>}
-            {r.status === "accepted" && <button onClick={() => updateReq(r.id, "delivered")}>作業して納品する</button>}
+            <p>{r.from_label} からのお仕事: {r.task}（お礼 {r.reward_usdc} ドル）</p>
+            {r.status === "open" && <button onClick={() => updateReq(r.id, "accepted")}>引き受ける</button>}
+            {r.status === "accepted" && <button onClick={() => updateReq(r.id, "delivered")}>作って届ける</button>}
             {r.status === "working" && <div><p>成果物を作成中です。5分以上応答がない場合は再試行できます。</p><button onClick={() => updateReq(r.id, "delivered")}>納品処理を再試行</button></div>}
             {r.content && <pre style={{ whiteSpace: "pre-wrap" }}>{r.content}</pre>}
           </div>
         ))}
 
         {s.outbox.map(r => <div className="card" key={r.id}>
-          <p>{r.to_label} への依頼: {r.task} · {r.status}</p>
+          <p>{r.to_label} にお願い中: {r.task} ・ {requestStatusText(r.status)}</p>
           {r.content && <pre style={{ whiteSpace: "pre-wrap" }}>{r.content}</pre>}
-          {r.status === "delivered" && <button onClick={() => updateReq(r.id, "done")}>成果物を検収する（報酬は別途World ID承認）</button>}
-          {r.reward_action_id && <p>報酬は承認待ち一覧で確認できます。</p>}
+          {r.status === "delivered" && <button onClick={() => updateReq(r.id, "done")}>受け取る（お礼は本人確認のあと）</button>}
+          {r.reward_action_id && <p className="small">お礼の承認が必要です。</p>}
         </div>)}
-        {network.some((p) => p.label !== s.label) && (
+
+        {network.some((p) => p.role === "work" && p.label !== s.label) && (
           <div className="card">
-            <p><b>相棒ネットワーク</b></p>
-            {network.filter((p) => p.label !== s.label).map((p) => (
-              <p key={p.label} className="mono">{p.full_name} · {ROLE_LABEL[p.role]}{p.skills?.length ? ` · ${p.skills.join("、")}` : ""}</p>
+            <p><b>頼める仲間</b></p>
+            {network.filter((p) => p.role === "work" && p.label !== s.label).map((p) => (
+              <p key={p.label}>
+                {p.full_name}{p.skills?.length ? ` · ${p.skills.join("、")}` : ""}{" "}
+                <button className="small" onClick={() => { setInput(`${p.full_name} に `); inputRef.current?.focus(); }}>この子に頼む</button>
+              </p>
             ))}
-            <p>チャットで『hana.otomo.eth に〇〇を頼んで』と話しかけると依頼できます（仕事係のみ）</p>
           </div>
         )}
+
         {!s.managed && <div className="card">
           <p>{t("allowanceInfo", lang, { amount: s.allowanceUsdc })}</p>
           <div className="row">
@@ -507,6 +508,29 @@ export default function CompanionPage() {
             <button className="ghost" onClick={mintTestUsdc} disabled={!address}>{t("mint", lang)}</button>
           </div>
         </div>}
+
+        <details className="plain" open={detailsOpen} onToggle={(e) => setDetailsOpen((e.target as HTMLDetailsElement).open)} ref={(el) => { detailsRef.current = el; }}>
+          <summary>くわしく</summary>
+          <p className="small">
+            ENS: {s.fullName}
+            <br />{t("moodLabel", lang)}: <b>{s.ens.mood ?? t("unset", lang)}</b>
+            <br />{t("resolveTo", lang)}: <span className="mono">{s.ens.address ?? t("unresolved", lang)}</span>
+          </p>
+          <ReputationCard snapshot={s.reputation} managed={s.managed} />
+          {s.actions.filter((a) => a.status !== "pending").slice(0, 5).map((a) => (
+            <p key={a.id} className={a.status === "executed" ? "small" : "ng"}>
+              {a.reason === "executing" ? "処理中" : a.reason === "confirmation_pending" ? "チェーンでの確定を確認中" : a.status}: {a.reason === "executing" || a.reason === "confirmation_pending" ? "" : a.reason ?? ""}{" "}
+              {a.tx_hash && <a href={`https://sepolia.etherscan.io/tx/${a.tx_hash}`} target="_blank" rel="noreferrer">tx</a>}
+            </p>
+          ))}
+          {strat?.strategies.map((st) => (
+            <p key={st.id} className="small">
+              {st.ship_tx && <a href={`https://sepolia.etherscan.io/tx/${st.ship_tx}`} target="_blank" rel="noreferrer">ship tx</a>}
+              {st.ship_tx && st.dock_tx && " / "}
+              {st.dock_tx && <a href={`https://sepolia.etherscan.io/tx/${st.dock_tx}`} target="_blank" rel="noreferrer">dock tx</a>}
+            </p>
+          ))}
+        </details>
       </section>
     </main>
   );
