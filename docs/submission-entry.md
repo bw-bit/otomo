@@ -32,7 +32,7 @@ Protected actions in the demonstrated app use Sandbox identities, not production
 
 The wallet keys are encrypted and held by the application's backend. Tokens remaining in a companion wallet does not mean the human alone controls the keys. Test-token balances and the fixed initial ratio do not represent market value, yield or promised profit. The current Aqua demo uses a single AMM strategy and a project-controlled taker.
 
-The original delivered introduction is English only. A new bilingual delivery, a live browser cancellation demonstration and a continuous narrated rehearsal are not yet complete. No demo video has been uploaded. A 2–4 minute, at least 720p video is required when applying for finalist prizes.
+A new bilingual delivery, review, 2 mUSDC payment, Aqua ship/swap/dock cycle and browser expiry rejection were completed in the latest functional rehearsal. A timed human-narrated rehearsal is not yet complete. No demo video has been uploaded. A 2–4 minute, at least 720p video is required when applying for finalist prizes.
 
 ## Evidence
 

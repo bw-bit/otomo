@@ -1,0 +1,96 @@
+{
+  "verifiedAt": "2026-09-26T11:01:47.449Z",
+  "chainId": 11155111,
+  "approval": "Sandbox mocked identity",
+  "checks": {
+    "allReceiptsSucceeded": true,
+    "paidWork": true,
+    "bilingualDelivery": true,
+    "shipNoTokenTransfer": true,
+    "swapHasTransfers": true,
+    "docked": true,
+    "zeroVirtual": true,
+    "expiredWithoutTx": true
+  },
+  "receipts": [
+    {
+      "hash": "0xc8a0e0dddca2ca73926c04c3a9bcb37d4cbb2c8ee1a7797eeb3099907649309c",
+      "status": "success",
+      "from": "0x67c15bae145ea5caee52989976491fe48dc4d99c",
+      "to": "0x16f95d91dba7da3aca778ec053df0ff6c6a8aa8e",
+      "transfers": [
+        {
+          "token": "0x16f95d91dba7da3aca778ec053df0ff6c6a8aa8e",
+          "from": "0x67C15bae145eA5cAeE52989976491fe48dC4D99C",
+          "to": "0x47638B38C6706FB60d710396CdD672A54C9160f0",
+          "value": "2000000"
+        }
+      ]
+    },
+    {
+      "hash": "0x4632b1b73053c61acbdda045c19670ec535881816a8c989c4fd3485c4841c8de",
+      "status": "success",
+      "from": "0x67c15bae145ea5caee52989976491fe48dc4d99c",
+      "to": "0x6b7110a6035beec23493242891fd490fc1e44167",
+      "transfers": []
+    },
+    {
+      "hash": "0x9f6ac79947900a094a5073bc6a67dd4afc10bc39009d9a8de25d11f2f685ed8d",
+      "status": "success",
+      "from": "0x21f09fcd8d58da73c8d597b5d712f0ddccb617c9",
+      "to": "0xa7d3abc48733d4692f7408f9453aceedf49ae0c1",
+      "transfers": [
+        {
+          "token": "0x16f95d91dba7da3aca778ec053df0ff6c6a8aa8e",
+          "from": "0x67C15bae145eA5cAeE52989976491fe48dC4D99C",
+          "to": "0x21F09fcd8d58Da73c8d597B5d712F0dDCCB617C9",
+          "value": "6659986"
+        },
+        {
+          "token": "0xf7a9c97d0dc45a13cd7e3e17406fa61ca72d66fa",
+          "from": "0x21F09fcd8d58Da73c8d597B5d712F0dDCCB617C9",
+          "to": "0xA7d3aBC48733d4692F7408f9453aCEEdF49ae0C1",
+          "value": "10000000000000000"
+        },
+        {
+          "token": "0xf7a9c97d0dc45a13cd7e3e17406fa61ca72d66fa",
+          "from": "0xA7d3aBC48733d4692F7408f9453aCEEdF49ae0C1",
+          "to": "0x67C15bae145eA5cAeE52989976491fe48dC4D99C",
+          "value": "10000000000000000"
+        }
+      ]
+    },
+    {
+      "hash": "0x63ec157c19ec7dbac91781e980763b47096905d8590f1f04fd43480f01f861f8",
+      "status": "success",
+      "from": "0x67c15bae145ea5caee52989976491fe48dc4d99c",
+      "to": "0x6b7110a6035beec23493242891fd490fc1e44167",
+      "transfers": []
+    }
+  ],
+  "finalMakerWalletAtomic": {
+    "usdc": "82680028",
+    "weth": "25000000000000000"
+  },
+  "finalVirtualBalances": {
+    "usdc": [
+      "0",
+      255
+    ],
+    "weth": [
+      "0",
+      255
+    ]
+  },
+  "job": {
+    "from": "sora",
+    "to": "taro",
+    "rewardUsdc": 2,
+    "bilingual": true,
+    "paymentTransaction": "0xc8a0e0dddca2ca73926c04c3a9bcb37d4cbb2c8ee1a7797eeb3099907649309c"
+  },
+  "failedApproval": {
+    "status": "expired",
+    "transactionHash": null
+  }
+}

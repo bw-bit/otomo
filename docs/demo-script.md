@@ -1,6 +1,6 @@
 # Otomo — English demo script (about 3 minutes)
 
-Recording and a continuous rehearsal are not yet complete. Use the updated live application: https://otomo-world-id.vercel.app/. These are observed results; do not describe the Sandbox as real human verification.
+The functional UI flow was rehearsed again on September 26: bilingual work, separate reward approval, a new Aqua lifecycle, and an expired approval with no execution. A timed human-narrated rehearsal and recording are not complete. Use the updated live application: https://otomo-world-id.vercel.app/. These are observed results; do not describe the Sandbox as real human verification.
 
 | Time | Screen/action | Narration |
 | --- | --- | --- |
@@ -14,17 +14,17 @@ Recording and a continuous rehearsal are not yet complete. Use the updated live 
 ## Evidence to open
 
 - [sora ENS registration](https://sepolia.etherscan.io/tx/0xc79ab334111faad4ef0d46561372f2c63ecca99e0d159fd0c7f4bf58c060d926)
-- [Reward payment](https://sepolia.etherscan.io/tx/0x665e2ba50bd08a3c23c73ce8acfdc55d5fe7e291a447d0f19cf01890141a5279)
-- [Aqua ship](https://sepolia.etherscan.io/tx/0xfdf6a1a210bbe96dec32c1f86ee5aebee1104c2610bdcb83400a9888fa19cb73)
-- [Aqua swap: actual token transfers](https://sepolia.etherscan.io/tx/0x90fd7ab3e00d650f05a4b3b43faf43816c7b22d51d9266b93c50cda4725b22af)
-- [Aqua dock](https://sepolia.etherscan.io/tx/0x45235c721d1158e96c8e32e9ddb121b4e35b6dd98d321f7d8472e3299cf1db9a)
+- [Reward payment](https://sepolia.etherscan.io/tx/0xc8a0e0dddca2ca73926c04c3a9bcb37d4cbb2c8ee1a7797eeb3099907649309c)
+- [Aqua ship](https://sepolia.etherscan.io/tx/0x4632b1b73053c61acbdda045c19670ec535881816a8c989c4fd3485c4841c8de)
+- [Aqua swap: actual token transfers](https://sepolia.etherscan.io/tx/0x9f6ac79947900a094a5073bc6a67dd4afc10bc39009d9a8de25d11f2f685ed8d)
+- [Aqua dock](https://sepolia.etherscan.io/tx/0x63ec157c19ec7dbac91781e980763b47096905d8590f1f04fd43480f01f861f8)
 - [sora ENS reputation publication](https://sepolia.etherscan.io/tx/0x7b224d66805a00f3bbaf5fe384df18c147e6e6df8804d227543ed40dee9ac310)
 - Machine-readable read-only recheck: [sepolia-demo.json](evidence/sepolia-demo.json).
 
-The initial introduction delivered only English. The “small job” prompt now requests English and Japanese, but that revised bilingual job has not been executed. Do not present the old delivery as bilingual.
+The latest delivered introduction contains English and Japanese, including 1inch Aqua + SwapVM, Sepolia and Sandbox disclosures. The original earlier delivery was English only.
 
 ## Still to demonstrate
 
-World ID for Agents denial/cancellation in the live browser, with no protected execution, and a continuous narrated rehearsal. Unit tests cover failure paths but do not replace that live demonstration. Live microphone conversation has not been reverified in this UI pass.
+A real expired approval was opened through Sandbox in the browser and returned Not executed. The database changed pending → expired with no transaction hash. Cancellation specifically remains unit-tested rather than browser-demonstrated. A timed narrated rehearsal, recording and microphone conversation remain unverified. See [latest rehearsal receipts](evidence/rehearsal-20260926.json).
 
-The [official video rules](https://ethglobal.com/events/tokyo2026/info/details) describe the video as optional, 2–4 minutes and at least 720p if uploaded, with human narration; AI voiceover and mobile-phone recording are disallowed. Do not use the app's synthesized voice as the presentation narrator.
+The project-creation guidelines require a video for finalist-prize applications. The [official video rules](https://ethglobal.com/events/tokyo2026/info/details) require 2–4 minutes and at least 720p if uploaded, with human narration; AI voiceover and mobile-phone recording are disallowed. Do not use the app's synthesized voice as the presentation narrator.
