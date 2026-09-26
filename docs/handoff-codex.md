@@ -3,12 +3,14 @@
 ## プロジェクト概要
 
 - リポジトリ: `/Users/R/hackathon/otomo`（GitHub: bw-bit/otomo, branch `main`）
-- Next.js アプリ: `app/`（Next.js 16.3.5, viem, @worldcoin/idkit 4.2.3, @google/genai）
+- Next.js アプリ: `app/`（Next.js 16.3.5, viem, @worldcoin/idkit 4.3.0, @google/genai）。4.3.0は本番に反映済み。
 - コントラクト: `contracts/`（Foundry、1inch Aqua + SwapVM）
 - 本番URL: `https://otomo-world-id.vercel.app`（Vercel プロジェクト `loveworks7-gmailcoms-projects/otomo`、CLIデプロイ方式）
 - ETHGlobal Tokyo 2026 提出用。締切は 9/27 09:00 JST。
 
 ## すでに完了しているもの
+
+（以下は前回ハンドオフの記録。今回の実機誕生・本番DB・Sepolia照合結果は「現在の状態」を参照。）
 
 - Sepolia に全デプロイ済み:
   - `otomo.eth` 登録済み（owner = operator `0x2F1758E72795DBe67A61e2cf6f4E86D68dC265B3`）
@@ -18,27 +20,20 @@
 - テスト 73 件全パス、tsc clean、本番ビルド成功
 - Vercel Production env 設定済み: `LLM_*`, `TTS_*`, `SEPOLIA_RPC_URL`, `COMPANION_WALLET_KEY`, `ENS_USER_REGISTRY`, `AQUA_*`, `MOCK_WETH_ADDRESS`, `WORLD_*`, `AGENT_OIDC_*` 等
 - operator 残高 ~0.12 ETH、agent に 0.02 ETH 送金済み
-- コミット push 済み最新: `e104072`
+- 現在のHEAD: `2f03a01`（branch `main`、`origin/main` と一致。未追跡 `app/scripts/smoke-ens.ts` は既存資産として保持）
 
-## 現在のブロッカー（最重要）
+## 現在の状態（2026-09-26 12:02 JST）
 
-**World ID の誕生フローがブラウザで失敗する。**
+**実機World App認証による誕生は完了。`sora.otomo.eth` が本番DBに作成され、Sepolia ENSで解決できる。ブラウザの読み込みも完了した。**
 
-- 症状: `https://otomo-world-id.vercel.app` で名前入力→「顔で誕生させる」→ IDKit ウィジェットが `Something went wrong / We couldn't complete your request` を出す。World App 側まで行かずブラウザ側エラー。`/api/birth` には一度も到達しない（Vercelログ確認済み）。
-- 検証済み事実:
-  - `/api/world/rp-signature` は本番で 200、`rp_id=rp_35ff4cfb1b8f2769`・有効な sig・誕生チャレンジ cookie を返す
-  - Node で `IDKit.request({...}).constraints(any(...))` を実 rp_context で実行すると**リクエスト作成・bridge登録・ポーリング（waiting_for_connection）まで全て成功**する（WASM 初期化は file:// fetch をパッチして確認）
-  - 本番バンドルは `environment:"production"`、`allow_legacy_proofs:!0`、constraints `any(selfie,passport,mnc,proof_of_human)` を含む
-  - v4 の action はハッシュ形 `0x00b3ad4f6105123548927b72800e30fd398fe0c73063a4ee2b369852b4dc7cf2`（= `otomo-birth`）で返る可能性があり両形受理済み
-- ユーザー報告: Selfie Check は World App で使えない、パスポートは登録済みのはず
-- **最有力仮説**: `WORLD_RP_SIGNING_KEY` が Developer Portal 発行の `signing_key` と不一致（自分で生成した鍵が入っている可能性）。次点: Portal にアクション `otomo-birth` 未登録 / app が staging 側にのみ存在
+- Developer Portal のアプリ `app_690ebac379aa31482fcbbb8f418ef6fc` では、RP ID `rp_35ff4cfb1b8f2769`・署名者・Action `otomo-birth` を照合済み。precheckは本番・Action active・`can_user_verify: yes`。環境変数は変更していない。Portal VerificationのApp URLが `https://docs.world.org/` なのは観測したが、今回は誕生に成功しており、失敗原因とは断定できない。
+- `@worldcoin/idkit` と core を4.3.0へ更新し、公式presetのlegacy Orbフォールバックと資格情報選択を導入。IDKitエラーコードをアプリ画面にも表示するようにした。RP署名TTLを誕生チャレンジと同じ600秒にした。旧試行では `world_id_4_not_available`、次の試行では `inclusion_proof_failed` を取得したが、後者の原因は特定できていない。最新試行は成功した。
+- 本番デプロイ `dpl_5AVbgD5rNXrRHBVfAwP8UqJbbMmg` はREADY、`otomo-world-id.vercel.app` alias付き。`/api/world/rp-signature` のTTL 600を本番で確認。ローカルの最新変更は `npm run lint` と `npm run build` 成功。73テスト成功はその前のIDKit更新時の記録で、最新変更後に全テストは再実行していない。
+- ユーザーのWorld Appは認証完了を表示。本番ログは `/api/birth` HTTP 200、`[birth] proof check { label: 'sora', ok: true }`。DB `birth_provisioning.status=ready`、登録tx `0xc79ab334111faad4ef0d46561372f2c63ecca99e0d159fd0c7f4bf58c060d926` のSepolia receiptはsuccess。ENS resolverと相棒ウォレットの解決先はDB値に一致し、`otomo.mood=calm`。
+- 相棒ページでチャット送受信を確認。人間パートナーとの紐付けと承認のissuerは `https://sandbox.auth.world.org`（模擬ID）。評判のENS公開tx `0x7b224d66805a00f3bbaf5fe384df18c147e6e6df8804d227543ed40dee9ac310` はsuccess、ENS textはDB snapshotに一致。**誕生認証は本番World ID、後続承認はSandbox**として区別する。
+- Aqua用相棒ウォレット残高はmUSDC 0・mWETH 0、strategy 0件。Live/TTS、Aquaアプリ操作、依頼/納品/支払い、動画収録は未検証。評判公開のpending actionがもう1件あるため、重複承認しない。
 
-## 次にやること（順番）
-
-1. ユーザーに確認: developer.world.org → アプリ `app_690ebac379aa31482fcbbb8f418ef6fc` → World ID 4.0/RP 設定で `rp_id`・`signing_key` を確認。`WORLD_RP_SIGNING_KEY` をポータル発行値に更新（Vercel + `app/.env.local`）→ `npx vercel --prod` で再デプロイ。アクション `otomo-birth` がなければポータルで作成
-2. ユーザーに再試行してもらい、失敗時はモーダルを閉じて `code:` を報告してもらう（page.tsx は `setDebug(true)` + onError で code/report を表示・console に出力済み）
-3. 誕生が通ったら E2E: 契り（OIDC）→ チャット → 🎤 Live → TTS → 依頼/納品/支払い → Aqua ship/swap/dock → 信頼度公開
-4. デモ動画収録: `docs/demo-script.md` 台本どおり一発通し（実声ナレーション、TTS音声はミュート、720p+、2〜4分）
+実測の詳細: `work/autonomy/otomo-birth-e2e-success.json`。デモ台本は `docs/demo-script.md`。誕生済みアカウントで同じ誕生を再実演しない。画面と登録txを使って収録する。
 
 ## 環境・ツールの注意
 

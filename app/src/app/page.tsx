@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { IDKitRequestWidget, CredentialRequest, any, setDebug, type IDKitResult, type RpContext } from "@worldcoin/idkit";
+import { IDKitErrorCodes, IDKitRequestWidget, mnc, passport, proofOfHuman, selfieCheck, setDebug, type IDKitResult, type RpContext } from "@worldcoin/idkit";
 import { BirthScene, type BirthPhase } from "@/components/BirthScene";
 import { BIRTH_ACTION } from "@/lib/birth";
 
@@ -10,6 +10,7 @@ setDebug(true);
 
 const APP_ID = process.env.NEXT_PUBLIC_WORLD_APP_ID as `app_${string}` | undefined;
 const WORLD_ENV = (process.env.NEXT_PUBLIC_WORLD_ENV ?? "staging") as "production" | "staging" | "sandbox";
+type BirthCredential = "human" | "passport" | "mnc" | "selfie";
 
 interface Born {
   label: string;
@@ -23,6 +24,7 @@ interface Born {
 export default function BirthPage() {
   const [label, setLabel] = useState("");
   const [hint, setHint] = useState("");
+  const [credential, setCredential] = useState<BirthCredential>("human");
   const [phase, setPhase] = useState<BirthPhase>("idle");
   const [rp, setRp] = useState<RpContext | null>(null);
   const [open, setOpen] = useState(false);
@@ -77,7 +79,7 @@ export default function BirthPage() {
         {!born ? (
           <>
             <h1>世界に一人の相棒を迎える</h1>
-            <p>World ID の本人確認（顔・パスポート・マイナンバー・Orb のいずれか）で相棒が生まれます。同じ認証識別子で作れる相棒は1体です。画像や文書の中身は受け取らず、検証結果と重複防止用の識別子だけを保存します。</p>
+            <p>World ID の本人確認（Proof of Human・Orb・Selfie・パスポート・マイナンバーカードのいずれか）で相棒が生まれます。同じ認証識別子で作れる相棒は1体です。画像や文書の中身は受け取らず、検証結果と重複防止用の識別子だけを保存します。</p>
             <p>ウォレット接続は不要です。相棒はSepolia上の専用テストウォレットを持ちます。</p>
             <div className="row"><button className="ghost" disabled={phase === "verifying" || phase === "forming"} onClick={() => setMode(mode === "birth" ? "login" : "birth")}>{mode === "birth" ? "すでに相棒がいる方はこちら" : "新しい相棒を迎える"}</button></div>
             {mode === "birth" && <>
@@ -88,9 +90,17 @@ export default function BirthPage() {
                   <input placeholder="どんな相棒がいい？（任意）" value={hint} onChange={(e) => setHint(e.target.value)} maxLength={200} />
                 </div>
             </>}
+            <div className="row">
+              <select className="credential-select" aria-label="World IDの資格情報" value={credential} onChange={(e) => setCredential(e.target.value as BirthCredential)} disabled={phase === "verifying" || phase === "forming"}>
+                <option value="human">Proof of Human / Orb</option>
+                <option value="passport">パスポート</option>
+                <option value="mnc">マイナンバーカード</option>
+                <option value="selfie">Selfie Check</option>
+              </select>
+            </div>
                 <div className="row">
                   <button onClick={start} disabled={(mode === "birth" && label.length < 3) || phase === "verifying" || phase === "forming"}>
-                    {phase === "forming" ? "生まれています…" : mode === "login" ? "World IDで相棒に会う" : "顔で誕生させる"}
+                    {phase === "forming" ? "生まれています…" : mode === "login" ? "World IDで相棒に会う" : "World IDで相棒を迎える"}
                   </button>
                 </div>
             {error && <p className="ng">{error}</p>}
@@ -121,19 +131,19 @@ export default function BirthPage() {
           app_id={APP_ID}
           action={BIRTH_ACTION}
           rp_context={rp}
-          allow_legacy_proofs={true}
+          allow_legacy_proofs={credential !== "selfie"}
           environment={WORLD_ENV}
-          constraints={any(
-            CredentialRequest("selfie", { signal }),
-            CredentialRequest("passport", { signal }),
-            CredentialRequest("mnc", { signal }),
-            CredentialRequest("proof_of_human", { signal }),
-          )}
+          preset={credential === "human" ? proofOfHuman({ signal }) : credential === "passport" ? passport({ signal }) : credential === "mnc" ? mnc({ signal }) : selfieCheck({ signal })}
           handleVerify={handleVerify}
           onSuccess={() => setOpen(false)}
           onError={(code, report) => {
             console.error("[idkit] error", code, report);
-            fail(`顔の確認が完了しませんでした（code: ${code}）${report ? ` — ${JSON.stringify(report).slice(0, 400)}` : ""}`);
+            setOpen(false);
+            if (code === IDKitErrorCodes.FailedByHostApp) {
+              setError((previous) => previous ?? `World IDの確認を完了できませんでした（code: ${code}）`);
+            } else {
+              fail(`World IDの確認を完了できませんでした（code: ${code}）`);
+            }
           }}
         />
       )}

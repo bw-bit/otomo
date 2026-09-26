@@ -1,4 +1,4 @@
-# Otomo リサーチメモ（2026-09-25 確認）
+# Otomo リサーチメモ（2026-09-26 公式賞ページ・提出規定を再確認）
 
 一次情報のURLと、実装で使う確定値をまとめる。出典のない値は使わない。
 
@@ -6,6 +6,7 @@
 - 応募できるパートナーは最大3社。同じスポンサーの複数部門は1社として数える（出典: /Users/R/hackathon/ETHGlobal-Tokyo-2026-prep.md）。
 - 対象: World（IDKit / World ID for Agents）、ENS（Best Use of ENSv2）、1inch（Build an Aqua App）。
 - 提出締切: 2026-09-27（日）09:00 JST。コミット履歴はイベント中に積む。AIの利用箇所と仕様・計画資料をリポジトリに含める。
+- [提出規定](https://ethglobal.com/events/tokyo2026/info/details): パートナーは最大3社。動画は任意だが、添付する場合は2〜4分・720p以上・実声で、携帯電話収録とAI音声は禁止。提出物にはリポジトリとAI利用箇所を含める。
 
 ## World
 ### IDKit（相棒の誕生に使う）
@@ -54,7 +55,7 @@
   - 特定キーだけの委任: `grantSetterRoles(encodeFunctionData(setText, ['0x', key, '']), account)`。取り消しは `revokeRoles(BigInt(keccak256(toHex(key))), ROLE_SET_TEXT, account)`。
   - 注意: 引数スコープの権限はそのリゾルバーが担当する**全ての名前**に効く。名前ごとに権限を分けたいなら名前ごとにリゾルバーを分ける。
 - エージェント向け標準: ENSIP-25（AI Agent Registry 名の検証）https://docs.ens.domains/ensip/25/ 、ENSIP-26（Agent Text Records）https://docs.ens.domains/ensip/26/
-- 審査: ENSv2 が中核であること、ハードコードでない動くデモ、ライブデモのリンク、オープンソース。エージェントを名前空間として扱い権限を持たせると加点。
+- [賞の要件](https://ethglobal.com/events/tokyo2026/prizes): ENSv2 が中核であること、ハードコードでない動くデモ、ライブデモのリンク、公開アクセス可能なソース。エージェントを名前空間として扱い権限を持たせると加点。2026-09-26時点の `bw-bit/otomo` はprivateで、公開ソース要件は未達。
 
 ## 1inch Aqua / SwapVM
 - Aqua: https://github.com/1inch/aqua （Solidity 0.8.30、Foundry、npm `@1inch/aqua`）

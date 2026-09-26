@@ -1,39 +1,29 @@
-# World 連携の振り返り（Otomo）
+# World連携の振り返り（Otomo、2026-09-26実測）
 
-提出対象部門: Best Use of IDKit / Best Use of World ID for Agents
+対象: ETHGlobal Tokyo 2026 Best Use of IDKit / Best Use of World ID for Agents。誕生認証と後続のSandbox承認を区別する。
 
-## 1. なぜこの credential を選んだか
+## 認証を必要とする場面と資格情報
 
-誕生の入口は **Selfie Check（issuer_schema_id 11）** を主軸に、**パスポート（9303）・マイナンバーカード（9310）・Proof of Human（1）** も受け付ける（`any()` 制約）。端末や地域で Selfie Check が使えないユーザーでも、手持ちの NFC 文書や Orb 認証で誕生できる。
+Otomoでは1つのWorld ID識別子から相棒を1体だけ誕生させる。誕生は一度きりの権利発行なので、人間性の確認とサーバー側のnullifier重複防止を組み合わせる。現在の画面の既定は `proofOfHuman({signal})`（Orbの旧証明フォールバックを含む）。パスポート、マイナンバーカード、Selfie Checkは本人が選択できる。属性や書類番号は保存しない。受け付けた個別のcredential名は今回の保存済みデータから断定できないため、実機で使った種類を特定済みとは扱わない。
 
-- Otomo の要件は「1人1体の相棒」＝一意の人間性の証明であり、パスポートや Orb 級の強度は不要だった
-- Orb は会場物理デバイス前提でハッカソンのデモ相手が使えない。Selfie Check は World App だけで完結し、参加者全員が試せる最低限の摩擦で済む
-- 応答の `sybil_score` を門番として使い、`WORLD_SYBIL_MAX` 閾値で疑わしい登録を拒否する実装にした
-- 重要操作（送金・依頼・運用）の承認には別途 World ID for Agents の OIDC を使い、`prompt=login` + `max_age=0` + `auth_time` で「その場の顔」を毎回要求する設計にした。誕生と実行で信頼の階層を分けている
+## 実測した成功経路
 
-## 2. 成功経路と代替経路
+1. 本番 `/api/world/rp-signature` がRP署名と600秒のチャレンジを発行。IDKit 4.3.0のQRを実機World Appで読み、ユーザーが認証を完了。
+2. 本番 `/api/birth` はHTTP 200、proof check `ok: true`。サーバーがPortal `/api/v4/verify/{rp_id}` へ送って検証し、signalと未使用nullifierを確認してから相棒を生成。
+3. `sora.otomo.eth` のDB状態はready。SepoliaのENS登録tx `0xc79ab334111faad4ef0d46561372f2c63ecca99e0d159fd0c7f4bf58c060d926` はsuccess、ENSの解決先は相棒ウォレットと一致。
 
-### 成功
-1. `/api/world/rp-signature` が `signRequest` で署名付き rp_context と誕生チャレンジ（signal）を発行
-2. IDKit（`IDKitRequestWidget`、4.2.3）が QR を出し、World App で Selfie Check 完了
-3. `/api/birth` が Portal `/api/v4/verify/{rp_id}` で検証 → signal一致 → nullifier 重複なし → 性格生成 → ENS 名発行 → セッション発行
+実機・DB・チェーン照合: `work/autonomy/otomo-birth-e2e-success.json`。
 
-### 代替経路（いずれも実装＋テスト済み）
-- **キャンセル/未完了**: IDKit の `onError` で失敗表示に戻る。保護処理は走らない
-- **証明がウォレットレス化前の別コンテキスト向け**: `signal_mismatch` で 403
-- **二重誕生**: `used_nullifiers` で `duplicate` 403
-- **sybil リスク超過**: `sybil_risk` 403
-- **期限切れ/取消の顔承認**: OIDC コールバックで `error` / state 不一致 / `auth_time` 古い場合は `rejected`・`expired` に落とし、pending action は実行されない（テストで網羅）
+## 意味のある失敗経路
 
-## 3. つまずきと学び
+最初の本番試行ではIDKit 4.2.3の `world_id_4_not_available` が出て、`/api/birth` に到達しなかった。別の4.3.0試行では `inclusion_proof_failed` が返り、同様に相棒は発行されなかった。これは利用できない資格情報・証明失敗時に保護処理が起きなかった実測例。後者は要求期限後の報告だったが、期限切れが原因とは確定していない。成功試行後、同じWorld IDでの二重発行は実機では試していない。signal不一致、nullifier重複、sybilリスク超過の拒否処理はコードにあるが、今回の実機デモ結果ではない。
 
-- **誕生セッションと証明の紐付け**: ウォレット接続を廃止したため、signal にウォレットアドレスを使えなくなった。サーバー発行の一度きりチャレンジ（クッキー＋DB、有効期限あり）を signal に採用して解決
-- **Sandbox は `localhost` コールバックを拒否**: HTTPS の本番 URL（Vercel）を用意してから Agents 登録を行う必要があった
-- **Agents ポータルのアクセス**: イベント開始直後は招待/ログイン方式が変わっていた（Okta化）。最新の sandbox ガイドと Discord 案内の確認が必要だった
-- **「証明成功」≠「実行許可」**: 顔承認と実行を分離し、pending action は `auth_time` とセッション一致を両方満たした時だけ動く、という設計が一番の改善点だった
+## World ID for Agents
 
-## 4. 残課題・改善点
+人間パートナーの紐付けと評判ENS公開は実行できた。OIDC issuerは `https://sandbox.auth.world.org` で、イベントの開発環境に相当する模擬ID。評判公開tx `0x7b224d66805a00f3bbaf5fe384df18c147e6e6df8804d227543ed40dee9ac310` はsuccess、ENS textとDB snapshotは一致した。要求→ユーザー完了→バックエンド検証→保護操作の成功経路を示す。一方、拒否・期限切れ・キャンセル時に保護操作が起きない経路は今回の本番画面で未実演。Sandboxの結果を本番身元保証と表現しない。
 
-- Selfie Check は現時点で World ID 3.0 経路（4.0 対応待ち）。Orb/Document へのアップグレード経路を UI 側に残したい
-- sybil_score は保存済みだが、信頼度スコア（`reputation` 集計）への寄与は初期値のみ。挙動（承認履歴・継続日数）が主体の信頼モデルに今後寄せたい
-- Agents の `agent_sub` との紐付けは bind フローで行うが、rediscovery（端末変更後の再紐付け）UX は未整備
+## 時間・摩擦・改善点
+
+最初に保存された本番失敗報告（2026-09-26 00:41 UTC）から、成功した `/api/birth`（02:54 UTC）までは約2時間13分。これは着手からの総時間ではない。最大の摩擦は、IDKitの汎用エラーだけでは資格情報・証明失敗を切り分けられなかった点。Action/RP署名/Portal precheckを照合し、IDKit 4.3.0、公式credential preset、旧Orbフォールバック、600秒署名TTLを順に反映して成功した。単一変更の寄与は切り分けられていない。最も有効な改善は、IDKitの具体的エラーコードをアプリ画面に表示し、サーバー到達前の失敗を特定できるようにしたこと。
+
+未収録: World ID for Agentsの拒否経路、動画、通しリハーサル。提出時は実演または証拠と未実演部分を区別する。
