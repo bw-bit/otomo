@@ -3,7 +3,7 @@ import type { Db } from "./db";
 
 export const BIRTH_ACTION = "otomo-birth";
 /** Deterministic hashed form of BIRTH_ACTION as it appears inside v4 payloads. */
-const BIRTH_ACTION_HASH = "0x00b3ad4f6105123548927b72800e30fd398fe0c73063a4ee2b369852b4dc7cf2";
+export const BIRTH_ACTION_HASH = "0x00b3ad4f6105123548927b72800e30fd398fe0c73063a4ee2b369852b4dc7cf2";
 
 export interface SelfieResponseItem {
   identifier: string;

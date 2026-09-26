@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { hashSignal } from "@worldcoin/idkit/hashing";
-import type { IDKitResultSession } from "@worldcoin/idkit";
+import type { IDKitResult, IDKitResultSession } from "@worldcoin/idkit";
+import { ACCEPTED_CREDENTIALS, BIRTH_ACTION, BIRTH_ACTION_HASH } from "./birth";
 import type { Db, Companion, PendingAction } from "./db";
 
 export async function ensureHumanApproval(db: Db) {
@@ -32,18 +33,40 @@ export async function createHumanChallenge(db: Db, label: string, actionId: stri
   return {id,signal,sessionId,expiresAt:expires,action:action?{intent:JSON.parse(action.intent),amountUsdc:action.amount_usdc,resolvedTo:action.resolved_to}:null};
 }
 /** Portal validates the cryptography; local checks bind the proof to owner, action, environment and nonce. */
-export async function completeHumanChallenge(db: Db, label: string, id: string, proof: IDKitResultSession, now: number, deps: {
-  verify: (proof: IDKitResultSession)=>Promise<boolean>;
+export async function completeHumanChallenge(db: Db, label: string, id: string, proof: IDKitResult, now: number, deps: {
+  verify: (proof: IDKitResult)=>Promise<boolean>;
   execute: (action: PendingAction,companion: Companion)=>Promise<{txHash?:string}>;
 }) {
   await ensureHumanApproval(db);
   const ch=(await db.execute({sql:"SELECT * FROM human_challenges WHERE id=? AND label=?",args:[id,label]})).rows[0];
   if (!ch || now>=Number(ch.expires_at)) throw new Error("Verification challenge expired or already used");
-  if (proof.protocol_version!=="4.0" || proof.environment!=="production" || proof.nonce!==ch.nonce || !/^session_.+/.test(proof.session_id)) throw new Error("Production proof does not match this challenge");
-  if (ch.session_id && proof.session_id!==ch.session_id) throw new Error("A different World ID cannot approve this action");
+  if (proof.environment!=="production" || proof.nonce!==ch.nonce) throw new Error("Production proof does not match this challenge");
   const expected=hashSignal(String(ch.signal)).toLowerCase();
-  if (!proof.responses?.length || proof.responses.some(r=>r.signal_hash?.toLowerCase()!==expected || r.session_nullifier?.length!==2 || ![1,11,9303,9310].includes(r.issuer_schema_id))) throw new Error("A fresh production credential proof bound to this action is required");
-  const keys=proof.responses.map(r=>`${proof.session_id}:${r.issuer_schema_id}:${r.session_nullifier.map(v=>BigInt(v).toString()).join(":")}`);
+  const sessionId = "session_id" in proof && typeof (proof as { session_id?: unknown }).session_id === "string" ? (proof as { session_id: string }).session_id : null;
+  let keys: string[];
+  let binding: string;
+  if (sessionId && /^session_.+/.test(sessionId)) {
+    // World ID 4.0 session proof — requires a v4-capable credential in World App.
+    const session = proof as IDKitResultSession;
+    if (session.protocol_version!=="4.0") throw new Error("Production proof does not match this challenge");
+    if (!session.responses?.length || session.responses.some(r=>r.signal_hash?.toLowerCase()!==expected || r.session_nullifier?.length!==2 || ![1,11,9303,9310].includes(r.issuer_schema_id))) throw new Error("A fresh production credential proof bound to this action is required");
+    keys=session.responses.map(r=>`${sessionId}:${r.issuer_schema_id}:${r.session_nullifier.map(v=>BigInt(v).toString()).join(":")}`);
+    binding=sessionId;
+  } else {
+    // Uniqueness proof (v3 legacy or v4) under the birth action: the response
+    // nullifier must equal the owner's birth nullifier, binding the approval to
+    // the same verified human.
+    const unique = proof as Exclude<IDKitResult, IDKitResultSession>;
+    if (unique.protocol_version!=="3.0" && unique.protocol_version!=="4.0") throw new Error("Production proof does not match this challenge");
+    if (typeof unique.action==="string" && unique.action!==BIRTH_ACTION && unique.action.toLowerCase()!==BIRTH_ACTION_HASH) throw new Error("Proof is not bound to this application");
+    const item=(unique.responses??[]).find(r=>ACCEPTED_CREDENTIALS.has(r.identifier) && r.signal_hash?.toLowerCase()===expected);
+    if (!item?.nullifier) throw new Error("A fresh production credential proof bound to this action is required");
+    if (item.nullifier!==String(ch.human)) throw new Error("A different human cannot approve this action");
+    const merkle="merkle_root" in item ? String(item.merkle_root) : "";
+    keys=[`u:${item.nullifier}:${merkle}:${typeof item.proof==="string"?item.proof:JSON.stringify(item.proof)}`];
+    binding=item.nullifier;
+  }
+  if (ch.session_id && binding!==ch.session_id) throw new Error("A different World ID cannot approve this action");
   if (!await deps.verify(proof)) throw new Error("World ID production verification failed");
   const tx=await db.transaction("write");
   let action: PendingAction | undefined, companion: Companion | undefined;
@@ -53,11 +76,11 @@ export async function completeHumanChallenge(db: Db, label: string, id: string, 
     if (consumed.rows.length!==1) throw new Error("Verification challenge expired or already used");
     for (const key of keys) await tx.execute({sql:"INSERT INTO human_proofs VALUES (?,?,?)",args:[key,id,now]});
     if (!ch.action_id) {
-      await tx.execute({sql:"INSERT INTO human_sessions VALUES (?,?,?)",args:[String(ch.human),proof.session_id,now]});
+      await tx.execute({sql:"INSERT INTO human_sessions VALUES (?,?,?)",args:[String(ch.human),binding,now]});
       await tx.execute({sql:"INSERT INTO identity_bindings (label,issuer,verified_at) SELECT label,'https://developer.world.org',? FROM companions WHERE COALESCE(human,world_nullifier)=? ON CONFLICT(label) DO UPDATE SET issuer=excluded.issuer,verified_at=excluded.verified_at",args:[now,String(ch.human)]});
     } else {
       const bound=(await tx.execute({sql:"SELECT session_id FROM human_sessions WHERE human=?",args:[String(ch.human)]})).rows[0];
-      if (bound?.session_id!==proof.session_id) throw new Error("World ID binding changed");
+      if (bound?.session_id!==binding) throw new Error("World ID binding changed");
       action=(await tx.execute({sql:"SELECT * FROM pending_actions WHERE id=? AND companion=?",args:[String(ch.action_id),label]})).rows[0] as unknown as PendingAction | undefined;
       if (!action || action.status!=="pending" || action.expires_at<=Math.max(now,Date.now()) || digest(action)!==ch.digest) throw new Error("Action changed, expired or already processed");
       companion=(await tx.execute({sql:"SELECT * FROM companions WHERE label=?",args:[label]})).rows[0] as unknown as Companion;
