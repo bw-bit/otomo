@@ -55,6 +55,7 @@ interface PeerCompanion { label: string; full_name: string; role: "personal" | "
 
 export default function CompanionPage() {
   const params = useSearchParams();
+  const [authNoticeDismissed, setAuthNoticeDismissed] = useState(false);
   const [s, setS] = useState<State | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -229,7 +230,7 @@ export default function CompanionPage() {
       prevMsgCount.current = -1;
       if (!await load()) { window.location.assign(`/otomo/${to}`); return; }
       window.history.replaceState(window.history.state, "", `/otomo/${to}`);
-      setInput(""); setNote(null); setMenuOpen(false); setDetailsOpen(false);
+      setInput(""); setNote(null); setMenuOpen(false); setDetailsOpen(false); setAuthNoticeDismissed(true);
     } catch (e) { setError(e instanceof Error ? e.message : t("switchFailed", langRef.current)); }
     finally { switchLock.current = false; setSwitching(false); }
   };
@@ -243,7 +244,7 @@ export default function CompanionPage() {
 
   useEffect(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, [s?.label, s?.messages.length, view]);
 
-  const authResult = params.get("auth");
+  const authResult = authNoticeDismissed ? null : params.get("auth");
   const authReason = params.get("reason");
 
   const send = async () => {
@@ -252,6 +253,7 @@ export default function CompanionPage() {
     setNote(null);
     setError(null);
     const message = input;
+    setAuthNoticeDismissed(true);
     try {
       const r = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message }) });
       const b = await r.json();
@@ -289,6 +291,7 @@ export default function CompanionPage() {
 
   const updateReq = async (id: string, status: "accepted" | "delivered" | "done" | "renew_reward") => {
     if (busy || switchLock.current) return;
+    setAuthNoticeDismissed(true);
     setBusy(true); setError(null);
     if (status === "delivered") setS(prev => prev ? { ...prev, inbox: prev.inbox.map(r => r.id === id ? { ...r, status: "working" } : r) } : prev);
     try {
@@ -309,6 +312,7 @@ export default function CompanionPage() {
 
   const prepareStrategy = async (st: StrategyRow, operation: "ship" | "dock" | "demo_swap") => {
     if (busy || switchLock.current) return;
+    setAuthNoticeDismissed(true);
     setBusy(true); setError(null);
     try { await postStrategy(st.id, { event: "prepare", operation }); await load(); setNote(t("operationQueued", langRef.current)); }
     catch (e) { setError(e instanceof Error ? e.message : t("operationPrepareFailed", langRef.current)); }
