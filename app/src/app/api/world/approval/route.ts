@@ -23,7 +23,7 @@ export async function POST(req:NextRequest) {
   const env=requireEnv("WORLD_RP_SIGNING_KEY","WORLD_RP_ID","NEXT_PUBLIC_WORLD_APP_ID");
   if(body.operation==="challenge") {
    if(body.actionId!==null && typeof body.actionId!=="string")throw new Error("actionId must be a string or null");
-   const signed=signRequest({signingKeyHex:env.WORLD_RP_SIGNING_KEY,ttl:300});
+   const signed=signRequest({action:BIRTH_ACTION,signingKeyHex:env.WORLD_RP_SIGNING_KEY,ttl:300});
    const challenge=await createHumanChallenge(db,label,body.actionId,signed.nonce,Date.now());
    return NextResponse.json({...challenge,worldAction:BIRTH_ACTION,appId:env.NEXT_PUBLIC_WORLD_APP_ID,rpContext:{rp_id:env.WORLD_RP_ID,nonce:signed.nonce,signature:signed.sig,created_at:signed.createdAt,expires_at:signed.expiresAt}},{headers:{"Cache-Control":"no-store"}});
   }
