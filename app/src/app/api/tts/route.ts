@@ -75,7 +75,7 @@ export async function handleTts(req: NextRequest, deps: TtsDeps): Promise<Respon
     let result = cacheGet(cache, key);
     if (!result) {
       result = await synthesizeSpeech(
-        { text: body.data.text, lang: body.data.lang, voiceName: voice, style: speechStyle(personality) },
+        { text: body.data.text, lang: body.data.lang, voiceName: voice, style: speechStyle(personality, body.data.lang) },
         deps.fetchFn ?? fetch,
         deps.env,
       );

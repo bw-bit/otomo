@@ -74,7 +74,9 @@ describe("ttsEnv / pickVoice / speechStyle", () => {
   });
   it("builds a style hint from the personality tone", () => {
     expect(speechStyle({ tone: "quiet" })).toContain("quiet");
-    expect(speechStyle(null)).toBe("speak naturally, like a trusted sibling");
+    expect(speechStyle(null)).toBe("speak warmly, like a trusted sibling");
+    expect(speechStyle({ tone: "げんき" }, "en")).toBe("speak warmly, like a trusted sibling; speak only in English");
+    expect(speechStyle({ tone: "げんき" }, "ja")).toContain("げんき");
     expect(speechStyle({ tone: 'weird"tone\n' })).not.toMatch(/["\n]/);
   });
 });

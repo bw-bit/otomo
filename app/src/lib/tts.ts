@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { LANG_LOCALES, isLang } from "./i18n";
+import { LANG_LOCALES, LANG_NAMES, isLang } from "./i18n";
 
 export const DEFAULT_TTS_BASE_URL = "https://generativelanguage.googleapis.com";
 
@@ -37,9 +37,12 @@ export function pickVoice(label: string, env: Partial<NodeJS.ProcessEnv> = proce
 }
 
 /** Short English style hint from the companion's personality. */
-export function speechStyle(personality: { tone?: string; firstPerson?: string } | null): string {
+export function speechStyle(personality: { tone?: string; firstPerson?: string } | null, lang?: string): string {
   const tone = personality?.tone?.replace(/[\r\n"']/g, " ").trim().slice(0, 60);
-  return tone ? `speak in a ${tone} tone, like a trusted sibling` : "speak naturally, like a trusted sibling";
+  // A non-ASCII (e.g. Japanese) tone hint makes the model switch languages, so only use it verbatim for Japanese output.
+  const useTone = tone && (lang === "ja" || /^[\x20-\x7e]+$/.test(tone));
+  const base = useTone ? `speak in a ${tone} tone, like a trusted sibling` : "speak warmly, like a trusted sibling";
+  return isLang(lang) ? `${base}; speak only in ${LANG_NAMES[lang]}` : base;
 }
 
 export interface SpeechRequest {
