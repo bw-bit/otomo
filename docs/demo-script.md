@@ -27,4 +27,6 @@ The latest delivered introduction contains English and Japanese, including 1inch
 
 A real expired approval was opened through Sandbox in the browser and returned Not executed. The database changed pending → expired with no transaction hash. Cancellation specifically remains unit-tested rather than browser-demonstrated. A timed narrated rehearsal, recording and microphone conversation remain unverified. See [latest rehearsal receipts](evidence/rehearsal-20260926.json).
 
+Update (Sep 26 evening): production session approval no longer requires Selfie Check only — the request now accepts any World ID 4.0 credential (Selfie Check, passport, or My Number Card) and the backend accepts issuer schema IDs 11 / 9303 / 9310 / 1. A device retry is pending: if the World App can produce a passport session proof, replace the limitation segment above with a real production approval and re-record that section. If it still returns `world_id_4_not_available`, keep the honest-limitation narration.
+
 The project-creation guidelines require a video for finalist-prize applications. The [official video rules](https://ethglobal.com/events/tokyo2026/info/details) require 2–4 minutes and at least 720p if uploaded, with human narration; AI voiceover and mobile-phone recording are disallowed. Do not use the app's synthesized voice as the presentation narrator.
