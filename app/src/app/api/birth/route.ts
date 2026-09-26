@@ -1,13 +1,14 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { consumeBirthChallenge, BIRTH_CHALLENGE_COOKIE } from "@/lib/birth-challenge";
 import { createCompanionWallet } from "@/lib/companion-wallet";
 import { z } from "zod";
-import { getDb } from "@/lib/db";
+import { getDb, type Companion } from "@/lib/db";
 import { optionalNumberEnv, requireEnv } from "@/lib/env";
 import { checkBirthProof, type BirthPayload } from "@/lib/birth";
-import { normalizeCompanionLabel } from "@/lib/ens";
+import { ROLE_KEY, SIBLINGS_KEY, normalizeCompanionLabel } from "@/lib/ens";
+import { siblingsOf } from "@/lib/household";
 import { generatePersonality, openAiCompatibleChat } from "@/lib/llm";
-import { publicClient, issueCompanionName, fundCompanionGas } from "@/lib/chain";
+import { publicClient, issueCompanionName, fundCompanionGas, companionSetText } from "@/lib/chain";
 import { SESSION_COOKIE, sessionValue } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -15,6 +16,7 @@ export const runtime = "nodejs";
 const bodySchema = z.object({
   label: z.string(),
   hint: z.string().max(200).default(""),
+  role: z.enum(["personal", "work"]).default("personal"),
   idkitResult: z.record(z.string(), z.unknown()),
 });
 
@@ -24,7 +26,7 @@ const portalBase = () =>
 export async function POST(req: NextRequest): Promise<Response> {
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });
-  const { hint } = parsed.data;
+  const { hint, role } = parsed.data;
   const payload = parsed.data.idkitResult as unknown as BirthPayload;
 
   let label: string;
@@ -46,6 +48,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const check = await checkBirthProof(payload, signal, {
       db,
       sybilMax: optionalNumberEnv("WORLD_SYBIL_MAX"),
+      maxCompanions: optionalNumberEnv("WORLD_MAX_COMPANIONS") ?? 3,
       verifyWithPortal: async (p) => {
         const res = await fetch(`${portalBase()}/api/v4/verify/${env.WORLD_RP_ID}`, {
           method: "POST",
@@ -66,12 +69,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (await publicClient().getChainId() !== 11155111) throw new Error("Sepolia RPC required");
     // Reserve identity before sending chain transactions: duplicates cannot race to mint two names.
     await db.batch([
-      { sql: "INSERT INTO used_nullifiers VALUES (?,?)", args: [check.nullifier, Date.now()] },
-      { sql: "INSERT INTO companions VALUES (?,?,?,?,?,?,?,?)", args: [label, fullName, wallet.address.toLowerCase(), "", JSON.stringify(personality), check.nullifier, null, Date.now()] },
+      { sql: "INSERT OR IGNORE INTO used_nullifiers VALUES (?,?)", args: [check.nullifier, Date.now()] },
+      { sql: "INSERT INTO companions (label,full_name,owner,resolver,personality,world_nullifier,agent_sub,created_at,human,role) VALUES (?,?,?,?,?,?,?,?,?,?)", args: [label, fullName, wallet.address.toLowerCase(), "", JSON.stringify(personality), `${check.nullifier}:${label}`, null, Date.now(), check.nullifier, role] },
       { sql: "INSERT INTO companion_identity VALUES (?,?,?,?,?)", args: [label, wallet.ciphertext, check.sybilScore, process.env.NEXT_PUBLIC_WORLD_ENV ?? "staging", Date.now()] },
       { sql: "INSERT INTO birth_provisioning VALUES (?, 'running', NULL, NULL)", args: [label] },
     ], "write");
     reservedLabel = label;
+    const siblings = (await siblingsOf(db, label)).filter((s) => s.label !== label);
     await fundCompanionGas(wallet.address);
     const issued = await issueCompanionName({
       label,
@@ -83,12 +87,27 @@ export async function POST(req: NextRequest): Promise<Response> {
         description: `${label} — Otomo companion. ${personality.catchphrase}`,
         personalityJson: JSON.stringify(personality),
         mood: "calm",
+        role,
+        skills: JSON.stringify(personality.strengths),
+        siblings: siblings.map((s) => s.full_name).join(","),
       },
     });
 
     await db.execute({ sql: "UPDATE companions SET resolver = ? WHERE label = ?", args: [issued.resolver, label] });
 
     await db.execute({ sql: "UPDATE birth_provisioning SET status='ready', register_tx=? WHERE label=?", args: [issued.registerTx, label] });
+    // Best effort: existing siblings announce the newcomer on their own ENS records, without delaying the birth.
+    if (siblings.length) after(async () => {
+      const all = await siblingsOf(db, label);
+      for (const s of siblings) {
+        try {
+          const c = (await db.execute({ sql: "SELECT * FROM companions WHERE label = ?", args: [s.label] })).rows[0] as unknown as Companion | undefined;
+          if (!c?.resolver) continue;
+          await companionSetText(c, SIBLINGS_KEY, all.filter((x) => x.label !== s.label).map((x) => x.full_name).join(","));
+          await companionSetText(c, ROLE_KEY, s.role);
+        } catch (e) { console.error("[birth] sibling ENS update failed", { sibling: s.label, error: e instanceof Error ? e.message : String(e) }); }
+      }
+    });
     const res = NextResponse.json({ label, fullName, personality, ...issued, needsAgentGrant: false });
     res.cookies.set(SESSION_COOKIE, sessionValue(label), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 86400 });
     return res;

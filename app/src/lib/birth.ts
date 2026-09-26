@@ -41,6 +41,8 @@ export interface BirthDeps {
   verifyWithPortal: (payload: BirthPayload) => Promise<{ ok: boolean; detail: string }>;
   sybilMax?: number;
   allowExisting?: boolean;
+  /** Maximum companions one verified human may own. Defaults to 1 (legacy single-companion mode). */
+  maxCompanions?: number;
 }
 
 /** Order matters: portal verification first, then only trust fields of the verified payload. */
@@ -57,8 +59,12 @@ export async function checkBirthProof(payload: BirthPayload, signal: string, dep
   if (!item.signal_hash || item.signal_hash.toLowerCase() !== expected)
     return { ok: false, code: "signal_mismatch", reason: "証明がこの誕生セッションに紐付いていません" };
 
-  const used = (await deps.db.execute({ sql: `SELECT 1 FROM used_nullifiers WHERE nullifier = ?`, args: [item.nullifier] })).rows[0];
-  if (used && !deps.allowExisting) return { ok: false, code: "duplicate", reason: "この World ID ではすでに相棒が生まれています（1人1体）" };
+  if (!deps.allowExisting) {
+    const limit = Math.max(1, Math.trunc(deps.maxCompanions ?? 1));
+    const owned = Number((await deps.db.execute({ sql: `SELECT COUNT(*) AS c FROM companions WHERE human = ?`, args: [item.nullifier] })).rows[0]?.c ?? 0);
+    if (owned >= limit)
+      return { ok: false, code: "duplicate", reason: limit === 1 ? "この World ID ではすでに相棒が生まれています（1人1体）" : `この World ID で作れる相棒は${limit}体までです` };
+  }
 
   const score = typeof item.sybil_score === "number" ? item.sybil_score : null;
   if (deps.sybilMax !== undefined && score !== null && score > deps.sybilMax)
@@ -68,5 +74,5 @@ export async function checkBirthProof(payload: BirthPayload, signal: string, dep
 }
 
 export async function markNullifierUsed(db: Db, nullifier: string, now: number) {
-  await db.execute({ sql: `INSERT INTO used_nullifiers VALUES (?, ?)`, args: [nullifier, now] });
+  await db.execute({ sql: `INSERT OR IGNORE INTO used_nullifiers VALUES (?, ?)`, args: [nullifier, now] });
 }

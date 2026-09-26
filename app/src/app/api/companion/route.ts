@@ -39,6 +39,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     return NextResponse.json({
       label: c.label,
       fullName: c.full_name,
+      role: c.role === "work" ? "work" : "personal",
       owner: c.owner,
       resolver: c.resolver,
       bound: !!c.agent_sub,

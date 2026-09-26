@@ -10,8 +10,14 @@ let db: Db; let dir: string;
 beforeEach(async () => {
  dir = await mkdtemp(path.join(tmpdir(),'otomo-work-'));
  db = await openDb(`file:${dir}/test.db`);
- for (const name of ['alice','bob']) await db.execute({sql:'INSERT INTO companions VALUES (?,?,?,?,?,?,?,?)',args:[name,`${name}.otomo.eth`,`0x${name}`,'0xresolver','{}',name,`sub-${name}`,1]});
+ for (const name of ['alice','bob']) await db.execute({sql:'INSERT INTO companions (label,full_name,owner,resolver,personality,world_nullifier,agent_sub,created_at) VALUES (?,?,?,?,?,?,?,?)',args:[name,`${name}.otomo.eth`,`0x${name}`,'0xresolver','{}',name,`sub-${name}`,1]});
+ await db.execute({sql:"UPDATE companions SET role='work' WHERE label='bob'",args:[]});
  await db.execute({sql:'INSERT INTO friend_requests VALUES (?,?,?,?,?,?,?)',args:['work1','alice','bob','Translate hello',5,'open',1]});
+});
+it('personal companions cannot accept outside work', async () => {
+ await db.execute({sql:'INSERT INTO friend_requests VALUES (?,?,?,?,?,?,?)',args:['work2','bob','alice','Write a memo',0,'open',1]});
+ await expect(acceptWork(db,'work2','alice')).rejects.toThrow('個人の相棒は外部の依頼を受けません');
+ await acceptWork(db,'work1','bob');
 });
 afterEach(async()=> {db.close();await rm(dir,{recursive:true,force:true});});
 it('only recipient delivers and requester reviews; reward is queued once',async()=>{

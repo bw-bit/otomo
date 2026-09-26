@@ -1,12 +1,12 @@
 # Otomo
 
-**English summary:** Otomo ("companion" in Japanese) creates one AI companion per verified World ID nullifier — no wallet connect needed. Each companion owns an encrypted wallet and a non-transferable ENSv2 subname with a dedicated Permissioned Resolver. Its Aqua + SwapVM strategy records virtual liquidity without depositing tokens on `ship`; tokens move only when a swap executes. Consequential actions use fresh OIDC approval in the World ID for Agents event sandbox; the sandbox identity is mocked. The Aqua flow is implemented but has not yet been exercised in the production app.
+**English summary:** Otomo ("companion" in Japanese) lets each verified World ID nullifier raise up to 3 AI companions with explicit roles (personal / work) — no wallet connect needed. Role permissions are enforced by deterministic policy code, and companions discover each other through ENS text records (`otomo.role`, `otomo.skills`, `otomo.siblings`). Each companion owns an encrypted wallet and a non-transferable ENSv2 subname with a dedicated Permissioned Resolver. Its Aqua + SwapVM strategy records virtual liquidity without depositing tokens on `ship`; tokens move only when a swap executes. Consequential actions use fresh OIDC approval in the World ID for Agents event sandbox; the sandbox identity is mocked. The Aqua flow is implemented but has not yet been exercised in the production app.
 
 ---
 
 ## Otomo とは
 
-Otomo は、World ID で本人確認した人間（Selfie Check / NFCパスポート / マイナンバー / Orb のいずれか）に1体だけ生まれる「相棒」です。**MetaMask 等のウォレット接続は不要** — 相棒は誕生時に専用ウォレット（AES-256-GCM で暗号化してサーバー保管）を持ち、自分の ENSv2 サブネーム（`<label>.otomo.eth`、譲渡不可）を自分で所有し、自分の資金を自分で動かします。人間は World ID で「この相棒のパートナー」として証明するだけです。
+Otomo は、World ID で本人確認した人間（Selfie Check / NFCパスポート / マイナンバー / Orb のいずれか）だけが迎えられる「相棒」です。1つの World ID 識別子につき最大3体（既定、`WORLD_MAX_COMPANIONS`）まで、役割は**個人**（秘書・会話・支払い）/**仕事**（依頼を受けて納品）から選び、役割ごとの許可操作はポリシーコードで強制します。**MetaMask 等のウォレット接続は不要** — 相棒は誕生時に専用ウォレット（AES-256-GCM で暗号化してサーバー保管）を持ち、自分の ENSv2 サブネーム（`<label>.otomo.eth`、譲渡不可）を自分で所有し、自分の資金を自分で動かします。人間は World ID で「この相棒のパートナー」として証明するだけです。
 
 相棒はチャットと音声会話（Gemini Live）で依頼を受けますが、LLM の出力は権限になりません — 送金・運用・外部依頼などの重要な操作はすべて決定的なポリシーコードで判定され、World ID for Agents の開発用Sandboxによる**再認証とサーバー検証**を通った時だけ実行されます。Sandboxの身元は模擬IDです。
 
@@ -78,7 +78,7 @@ flowchart LR
 
 ### World — Best Use of IDKit / Best Use of World ID for Agents
 
-- **資格情報の選択**: 現在の既定は Proof of Human（旧Orb証明へのフォールバックあり）。パスポート（9303）・マイナンバー（9310）・Selfie Check（11）も画面で選択できます。実機で受け付けた個別資格情報の種類は今回の保存データから断定していません。「1識別子に1体」は nullifier（`used_nullifiers` テーブル）で担保し、顔画像・生体情報はアプリに一切届きません（サーバーからDeveloper Portalへ検証を依頼）。`WORLD_SYBIL_MAX` で sybil_score 超過の誕生を拒否できます。
+- **資格情報の選択**: 現在の既定は Proof of Human（旧Orb証明へのフォールバックあり）。パスポート（9303）・マイナンバー（9310）・Selfie Check（11）も画面で選択できます。実機で受け付けた個別資格情報の種類は今回の保存データから断定していません。「1識別子につき最大3体」は nullifier で相棒をグループ化して数えることで担保し（`companions.human`）、顔画像・生体情報はアプリに一切届きません（サーバーからDeveloper Portalへ検証を依頼）。`WORLD_SYBIL_MAX` で sybil_score 超過の誕生を拒否できます。
 - **バックエンド検証**: RP 署名は [`app/src/app/api/world/rp-signature/route.ts`](app/src/app/api/world/rp-signature/route.ts)、proof 検証は [`app/src/app/api/birth/route.ts`](app/src/app/api/birth/route.ts) が `POST https://developer.world.org/api/v4/verify/{rp_id}` に委譲。順序: verify 成功 → signal 一致 → nullifier 未使用 → sybil 判定。
 - **World ID for Agents（OIDC sandbox）**: 重要操作は [`app/src/lib/approval.ts`](app/src/lib/approval.ts) + [`app/src/app/api/approval/callback/route.ts`](app/src/app/api/approval/callback/route.ts) で「その場の本人確認」。`prompt=login&max_age=0`、PKCE S256、JWKS で iss/aud/exp/nonce 検証、`auth_time >= action.created_at`、pairwise `sub` が契りの sub と一致した時だけ実行。
 - **失敗パス**: キャンセル・期限切れ（5分）・別人・古い auth_time・state リプレイはすべて rejected/expired で**実行されない**こと — [`app/tests/approval.test.ts`](app/tests/approval.test.ts)（8件）。
@@ -166,7 +166,7 @@ cd ../app && npm run dev      # http://localhost:3000
 ## 未検証・制限（正直に）
 
 - **Aqua スタックはSepoliaにデプロイ済み**。コントラクト単体の ship→quote→swap→dock はローカル anvil で実証済みですが、相棒 `sora` のアプリ側 ship→swap→dock は実チェーンで未検証です。mUSDC・mWETH残高とstrategy件数は0です。
-- Selfie Check は厳密な「1人1アカウント」を保証しません（medium assurance）。1体制限は nullifier で担保し、追加のリスク判定に sybil_score を使います。
+- Selfie Check は厳密な「1人1アカウント」を保証しません（medium assurance）。体数の上限は nullifier で担保し、追加のリスク判定に sybil_score を使います。
 - 価格はモック想定（2000 USDC/WETH の固定レートで WETH レグを半分に）。モックトークンなので実市場連動ではありません。
 - LLM は OpenAI 互換 `/chat/completions` なら任意のプロバイダに差し替え可能。LLM の出力は intent JSON として zod 検証され、ポリシー判定は常に決定的なコード側です。
 - TTS（Gemini Interactions API）と ephemeral token 発行は実 Gemini API で疎通確認済み。今回の誕生後セッションではGemini Live / TTSを再確認していません。テストは `fetchFn` / `chatFn` / `issueToken` 注入と `file:` 一時 DB のみで、外部呼び出しはありません。

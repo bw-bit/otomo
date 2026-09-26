@@ -43,7 +43,7 @@ beforeEach(async () => {
   dir = await mkdtemp(path.join(tmpdir(), "otomo-tts-"));
   db = await openDb(`file:${path.join(dir, "test.db")}`);
   await db.execute({
-    sql: `INSERT INTO companions VALUES (?,?,?,?,?,?,?,?)`,
+    sql: `INSERT INTO companions (label,full_name,owner,resolver,personality,world_nullifier,agent_sub,created_at) VALUES (?,?,?,?,?,?,?,?)`,
     args: ["taro", "taro.otomo.eth", "0xowner", "0xres", PERSONALITY, "n1", "sub", 1],
   });
 });

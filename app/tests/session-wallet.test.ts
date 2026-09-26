@@ -21,7 +21,7 @@ it('wallets are distinct and ciphertext is bound to the companion and encryption
  const dir=await mkdtemp(path.join(tmpdir(),'otomo-wallet-'));const db=await openDb(`file:${dir}/db`);
  try{
   for(const [name,w] of [['alice',alice],['bob',bob]] as const){
-   await db.execute({sql:'INSERT INTO companions VALUES (?,?,?,?,?,?,?,?)',args:[name,`${name}.otomo.eth`,w.address,'','{}',name,null,1]});
+   await db.execute({sql:'INSERT INTO companions (label,full_name,owner,resolver,personality,world_nullifier,agent_sub,created_at) VALUES (?,?,?,?,?,?,?,?)',args:[name,`${name}.otomo.eth`,w.address,'','{}',name,null,1]});
    await db.execute({sql:'INSERT INTO companion_identity VALUES (?,?,?,?,?)',args:[name,w.ciphertext,null,'sandbox',1]});
   }
   expect((await companionWallet(db,'alice')).account.address).toBe(alice.address);

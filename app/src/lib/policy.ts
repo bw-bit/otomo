@@ -1,5 +1,6 @@
 import type { Address } from "viem";
 import type { Intent } from "./intent";
+import type { CompanionRole } from "./db";
 
 export const MAX_SINGLE_PAYMENT_USDC = 20;
 export const APPROVAL_TTL_MS = 5 * 60 * 1000;
@@ -20,7 +21,13 @@ export interface PolicyContext {
   resolveName: (nameOrAddress: string) => Promise<Address | null>;
   /** True if the name belongs to an Otomo companion (has otomo.personality). */
   isCompanion: (name: string) => Promise<boolean>;
+  /** Role of the acting companion. Work companions only deliver; they never move money or delegate. */
+  role?: CompanionRole;
+  /** Role of another companion by ENS name or label; null if unknown. */
+  roleOf?: (name: string) => Promise<CompanionRole | null>;
 }
+
+const WORK_FORBIDDEN: ReadonlySet<Intent["type"]> = new Set(["send_usdc", "grow_savings", "request_friend", "private_task"]);
 
 function checkAmount(amount: number, ctx: PolicyContext): string | null {
   if (amount > MAX_SINGLE_PAYMENT_USDC) return `1回の上限 ${MAX_SINGLE_PAYMENT_USDC} USDC を超えています`;
@@ -30,6 +37,8 @@ function checkAmount(amount: number, ctx: PolicyContext): string | null {
 }
 
 export async function decide(intent: Intent, ctx: PolicyContext): Promise<PolicyDecision> {
+  if (ctx.role === "work" && WORK_FORBIDDEN.has(intent.type))
+    return { kind: "reject", reason: "仕事係の相棒はお金を動かしたり依頼を出したりしません。個人の相棒に頼んでください" };
   switch (intent.type) {
     case "strategy_operation":
     case "publish_reputation":
@@ -59,6 +68,8 @@ export async function decide(intent: Intent, ctx: PolicyContext): Promise<Policy
     case "request_friend": {
       if (!(await ctx.isCompanion(intent.friend)))
         return { kind: "reject", reason: `${intent.friend} は Otomo の相棒ではありません` };
+      if (ctx.roleOf && (await ctx.roleOf(intent.friend)) !== "work")
+        return { kind: "reject", reason: `${intent.friend} は依頼を受ける仕事係ではありません` };
       const to = await ctx.resolveName(intent.friend);
       if (!to) return { kind: "reject", reason: `${intent.friend} を解決できませんでした` };
       if (intent.rewardUsdc > 0) {

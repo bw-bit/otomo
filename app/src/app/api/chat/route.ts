@@ -11,6 +11,7 @@ import { hasCompanionWallet } from "@/lib/companion-wallet";
 import { companionSetText } from "@/lib/chain";
 import { MAX_SINGLE_PAYMENT_USDC } from "@/lib/policy";
 import { SESSION_COOKIE, readSession } from "@/lib/session";
+import { roleOf } from "@/lib/household";
 
 export const runtime = "nodejs";
 
@@ -28,7 +29,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (!c) return NextResponse.json({ error: "相棒が見つかりません" }, { status: 404 });
 
     const history = [...(await db.execute({ sql: `SELECT role, content FROM messages WHERE companion = ? ORDER BY id DESC LIMIT 12`, args: [label] })).rows].reverse() as unknown as ChatMessage[];
-    const system = companionSystemPrompt(c.label, c.full_name, personalitySchema.parse(JSON.parse(c.personality)));
+    const role = c.role === "work" ? "work" : "personal";
+    const system = companionSystemPrompt(c.label, c.full_name, personalitySchema.parse(JSON.parse(c.personality)), role);
     const reply = await openAiCompatibleChat([{ role: "system", content: system }, ...history, { role: "user", content: body.data.message }]);
     const { text, intent } = parseIntent(reply);
 
@@ -45,6 +47,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       agentAllowanceUsdc: managed ? Math.min(MAX_SINGLE_PAYMENT_USDC, await usdcBalanceOf(c.owner as Address)) : await agentAllowanceUsdc(c.owner as Address),
       resolveName,
       isCompanion,
+      role,
+      roleOf: (name) => roleOf(db, name),
     });
     console.info("[chat] decision", { label, intent: intent.type, decision: decision.kind });
 

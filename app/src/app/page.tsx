@@ -25,6 +25,7 @@ export default function BirthPage() {
   const [label, setLabel] = useState("");
   const [hint, setHint] = useState("");
   const [credential, setCredential] = useState<BirthCredential>("human");
+  const [role, setRole] = useState<"personal" | "work">("personal");
   const [phase, setPhase] = useState<BirthPhase>("idle");
   const [rp, setRp] = useState<RpContext | null>(null);
   const [open, setOpen] = useState(false);
@@ -58,7 +59,7 @@ export default function BirthPage() {
     const res = await fetch(mode === "login" ? "/api/login" : "/api/birth", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ label, hint, idkitResult: result }),
+      body: JSON.stringify({ label, hint, role, idkitResult: result }),
     });
     const body = await res.json();
     if (!res.ok) {
@@ -79,7 +80,7 @@ export default function BirthPage() {
         {!born ? (
           <>
             <h1>世界に一人の相棒を迎える</h1>
-            <p>World ID の本人確認（Proof of Human・Orb・Selfie・パスポート・マイナンバーカードのいずれか）で相棒が生まれます。同じ認証識別子で作れる相棒は1体です。画像や文書の中身は受け取らず、検証結果と重複防止用の識別子だけを保存します。</p>
+            <p>World ID の本人確認（Proof of Human・Orb・Selfie・パスポート・マイナンバーカードのいずれか）で相棒が生まれます。同じ認証識別子で作れる相棒は最大3体です（個人・仕事など役割ごとに）。画像や文書の中身は受け取らず、検証結果と重複防止用の識別子だけを保存します。</p>
             <p>ウォレット接続は不要です。相棒はSepolia上の専用テストウォレットを持ちます。</p>
             <div className="row"><button className="ghost" disabled={phase === "verifying" || phase === "forming"} onClick={() => setMode(mode === "birth" ? "login" : "birth")}>{mode === "birth" ? "すでに相棒がいる方はこちら" : "新しい相棒を迎える"}</button></div>
             {mode === "birth" && <>
@@ -88,6 +89,12 @@ export default function BirthPage() {
                 </div>
                 <div className="row">
                   <input placeholder="どんな相棒がいい？（任意）" value={hint} onChange={(e) => setHint(e.target.value)} maxLength={200} />
+                </div>
+                <div className="row">
+                  <select className="credential-select" aria-label="相棒の役割" value={role} onChange={(e) => setRole(e.target.value === "work" ? "work" : "personal")} disabled={phase === "verifying" || phase === "forming"}>
+                    <option value="personal">個人（秘書・会話・支払い）</option>
+                    <option value="work">仕事（依頼を受けて納品）</option>
+                  </select>
                 </div>
             </>}
             <div className="row">

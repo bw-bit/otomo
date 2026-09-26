@@ -1,6 +1,8 @@
 import { createClient, type Client } from "@libsql/client";
 import path from "node:path";
 
+export type CompanionRole = "personal" | "work";
+
 export interface Companion {
   label: string;
   full_name: string;
@@ -10,6 +12,9 @@ export interface Companion {
   world_nullifier: string;
   agent_sub: string | null;
   created_at: number;
+  /** Raw World ID nullifier shared by all companions of one human. */
+  human: string | null;
+  role: CompanionRole;
 }
 
 export interface PendingAction {
@@ -56,7 +61,8 @@ export interface AuthFlow {
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS companions (
   label TEXT PRIMARY KEY, full_name TEXT NOT NULL, owner TEXT NOT NULL UNIQUE, resolver TEXT NOT NULL,
-  personality TEXT NOT NULL, world_nullifier TEXT NOT NULL UNIQUE, agent_sub TEXT, created_at INTEGER NOT NULL);
+  personality TEXT NOT NULL, world_nullifier TEXT NOT NULL UNIQUE, agent_sub TEXT, created_at INTEGER NOT NULL,
+  human TEXT, role TEXT NOT NULL DEFAULT 'personal');
 CREATE TABLE IF NOT EXISTS pending_actions (
   id TEXT PRIMARY KEY, companion TEXT NOT NULL, intent TEXT NOT NULL, resolved_to TEXT, amount_usdc REAL NOT NULL,
   status TEXT NOT NULL, reason TEXT, tx_hash TEXT, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL);
@@ -97,12 +103,22 @@ CREATE TABLE IF NOT EXISTS translations (
   created_at INTEGER NOT NULL);
 `;
 
+/** Additive migration: one human may own several companions, grouped by `human`, each with a role. */
+async function migrateCompanions(db: Client) {
+  const cols = new Set((await db.execute("PRAGMA table_info(companions)")).rows.map((r) => String(r.name)));
+  if (!cols.has("human")) await db.execute("ALTER TABLE companions ADD COLUMN human TEXT");
+  if (!cols.has("role")) await db.execute("ALTER TABLE companions ADD COLUMN role TEXT NOT NULL DEFAULT 'personal'");
+  await db.execute("UPDATE companions SET human = world_nullifier WHERE human IS NULL");
+  await db.execute("CREATE INDEX IF NOT EXISTS companions_human ON companions(human)");
+}
+
 export async function openDb(url = process.env.TURSO_DATABASE_URL || `file:${process.env.OTOMO_DB ?? path.join(process.cwd(), "otomo.db")}`): Promise<Client> {
   if (process.env.VERCEL && (!process.env.TURSO_DATABASE_URL || url.startsWith("file:"))) throw new Error("A remote TURSO_DATABASE_URL is required on Vercel");
   if (!url.startsWith("file:") && !process.env.TURSO_AUTH_TOKEN) throw new Error("TURSO_AUTH_TOKEN is required for the remote database");
   const db = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN || undefined });
   try {
     for (const sql of SCHEMA.split(";").map((s) => s.trim()).filter(Boolean)) await db.execute(sql);
+    await migrateCompanions(db);
   } catch (error) {
     db.close();
     throw error;

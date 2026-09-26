@@ -11,7 +11,7 @@ let db: Db;
 let dir: string;
 
 async function seedCompanion(sub: string | null = "sub-owner") {
-  await db.execute({ sql: `INSERT INTO companions VALUES (?,?,?,?,?,?,?,?)`, args: ["taro", "taro.otomo.eth", "0xowner", "0xres", "{}", "n1", sub, T0] });
+  await db.execute({ sql: `INSERT INTO companions (label,full_name,owner,resolver,personality,world_nullifier,agent_sub,created_at) VALUES (?,?,?,?,?,?,?,?)`, args: ["taro", "taro.otomo.eth", "0xowner", "0xres", "{}", "n1", sub, T0] });
 }
 
 async function setup(authTimeSec = Math.floor(T0 / 1000) + 10, sub = "sub-owner") {

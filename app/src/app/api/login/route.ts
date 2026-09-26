@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       },
     });
     if (!check.ok) return NextResponse.json({ error: check.reason }, { status: 403 });
-    const c = (await db.execute({ sql: "SELECT label FROM companions WHERE world_nullifier = ?", args: [check.nullifier] })).rows[0];
+    const c = (await db.execute({ sql: "SELECT label FROM companions WHERE human = ? ORDER BY created_at LIMIT 1", args: [check.nullifier] })).rows[0];
     if (!c) return NextResponse.json({ error: "このWorld IDの相棒はまだいません" }, { status: 404 });
     const response = NextResponse.json({ label: String(c.label) });
     response.cookies.set(SESSION_COOKIE, sessionValue(String(c.label)), { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 86400 });

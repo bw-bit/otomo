@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { requireEnv } from "./env";
+import type { CompanionRole } from "./db";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -45,7 +46,12 @@ export async function generatePersonality(label: string, hint: string, chat: Cha
   return personalitySchema.parse(JSON.parse(json));
 }
 
-export function companionSystemPrompt(label: string, fullName: string, p: Personality) {
+const ROLE_PROMPTS: Record<CompanionRole, string> = {
+  personal: "あなたは持ち主の個人的な相棒・秘書です。仕事は仕事係の相棒（兄弟）に依頼できます。",
+  work: "あなたは依頼を受けて成果物を納品する仕事係です。お金を動かしたり依頼を出したりはしません。",
+};
+
+export function companionSystemPrompt(label: string, fullName: string, p: Personality, role: CompanionRole = "personal") {
   return [
     `あなたは「${label}」（ENS名 ${fullName}）。持ち主にとって兄弟のように信頼できる相棒です。`,
     `一人称は「${p.firstPerson}」、口調は「${p.tone}」。得意なこと: ${p.strengths.join("、")}。口癖: 「${p.catchphrase}」`,
@@ -56,5 +62,6 @@ export function companionSystemPrompt(label: string, fullName: string, p: Person
     '{"type":"private_task","summary":"..."}  人に見せない個人的な頼みごと',
     '{"type":"grow_savings","amountUsdc":数値,"days":1〜30の整数}  「お金を増やして」「貯金を運用して」と頼まれた時（days省略時は7）。資金は持ち主のウォレットから出ず、1inch Aqua の 0.3% 手数料 AMM 戦略に載せることを説明してから返す',
     "実行は持ち主の顔による承認の後にシステムが行う。あなたが実行したと言ってはいけない。",
+    ROLE_PROMPTS[role],
   ].join("\n");
 }

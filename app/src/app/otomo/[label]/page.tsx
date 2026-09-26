@@ -17,7 +17,7 @@ interface FriendReq { content?: string; reviewed_at?: number; reward_action_id?:
 interface State {
   provisioning?: { status: string; error: string | null };
   managed: boolean; reputation: ReputationSnapshot;
-  label: string; fullName: string; owner: string; bound: boolean; agent: `0x${string}`; allowanceUsdc: number;
+  label: string; fullName: string; role: "personal" | "work"; owner: string; bound: boolean; agent: `0x${string}`; allowanceUsdc: number;
   ens: { address: string | null; mood: string | null; personality: string | null };
   actions: Action[]; inbox: FriendReq[]; outbox: FriendReq[]; messages: { role: string; content: string }[];
 }
@@ -47,6 +47,9 @@ const INTENT_KEYS: Record<string, UiKey> = {
 
 const subKey = (lang: Lang, content: string) => `${lang}:${content}`;
 
+interface PeerCompanion { label: string; full_name: string; role: "personal" | "work"; skills?: string[] }
+const ROLE_LABEL = { personal: "個人", work: "仕事" } as const;
+
 export default function CompanionPage() {
   const params = useSearchParams();
   const [s, setS] = useState<State | null>(null);
@@ -56,6 +59,8 @@ export default function CompanionPage() {
   const [note, setNote] = useState<string | null>(null);
   const [cap, setCap] = useState("20");
   const [strat, setStrat] = useState<StratState | null>(null);
+  const [mine, setMine] = useState<PeerCompanion[]>([]);
+  const [network, setNetwork] = useState<PeerCompanion[]>([]);
   const [lang, setLang] = useState<Lang>("ja");
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [speaking, setSpeaking] = useState<number | null>(null);
@@ -150,7 +155,16 @@ export default function CompanionPage() {
     }
     const sr = await fetch("/api/strategies");
     if (sr.ok) setStrat(await sr.json());
+    const [mr, nr] = await Promise.all([fetch("/api/companions/mine"), fetch("/api/companions")]);
+    if (mr.ok) setMine((await mr.json()).companions ?? []);
+    if (nr.ok) setNetwork((await nr.json()).companions ?? []);
   }, []);
+
+  const switchTo = async (to: string) => {
+    const r = await fetch("/api/session/switch", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: to }) });
+    if (!r.ok) return setError((await r.json().catch(() => null))?.error ?? "切り替えできませんでした");
+    window.location.href = `/otomo/${to}`;
+  };
   useEffect(() => void load(), [load]);
 
   // Lazily translate assistant messages into the selected language for subtitles.
@@ -337,7 +351,14 @@ export default function CompanionPage() {
             {t("autoSpeak", lang)}
           </label>
         </div>
-        <h1>{s.fullName}</h1>
+        <h1>{s.fullName} <small>· {ROLE_LABEL[s.role]}</small></h1>
+        <div className="row">
+          <span>わたしの相棒:</span>
+          {mine.map((m) => (
+            <button key={m.label} className="ghost" disabled={m.label === s.label} onClick={() => void switchTo(m.label)}>{m.label}（{ROLE_LABEL[m.role]}）</button>
+          ))}
+          <a href="/"><button className="ghost">新しい相棒を迎える</button></a>
+        </div>
         <button className="ghost" onClick={async () => { await fetch("/api/logout", { method: "POST" }); window.location.href = "/"; }}>ログアウト</button>
         {s.provisioning && s.provisioning.status !== "ready" && <p className="ng">ENS登録: {s.provisioning.status}。{s.provisioning.error}</p>}
         <ReputationCard snapshot={s.reputation} managed={s.managed} />
@@ -456,7 +477,7 @@ export default function CompanionPage() {
         {s.inbox.map((r) => (
           <div className="card" key={r.id}>
             <p>{t("inboxItem", lang, { from: r.from_label, task: r.task, reward: r.reward_usdc, status: r.status })}</p>
-            {r.status === "open" && <button onClick={() => updateReq(r.id, "accepted")}>{t("accept", lang)}</button>}
+            {r.status === "open" && s.role === "work" && <button onClick={() => updateReq(r.id, "accepted")}>{t("accept", lang)}</button>}
             {r.status === "accepted" && <button onClick={() => updateReq(r.id, "delivered")}>作業して納品する</button>}
             {r.status === "working" && <div><p>成果物を作成中です。5分以上応答がない場合は再試行できます。</p><button onClick={() => updateReq(r.id, "delivered")}>納品処理を再試行</button></div>}
             {r.content && <pre style={{ whiteSpace: "pre-wrap" }}>{r.content}</pre>}
@@ -469,6 +490,15 @@ export default function CompanionPage() {
           {r.status === "delivered" && <button onClick={() => updateReq(r.id, "done")}>成果物を検収する（報酬は別途World ID承認）</button>}
           {r.reward_action_id && <p>報酬は承認待ち一覧で確認できます。</p>}
         </div>)}
+        {network.some((p) => p.label !== s.label) && (
+          <div className="card">
+            <p><b>相棒ネットワーク</b></p>
+            {network.filter((p) => p.label !== s.label).map((p) => (
+              <p key={p.label} className="mono">{p.full_name} · {ROLE_LABEL[p.role]}{p.skills?.length ? ` · ${p.skills.join("、")}` : ""}</p>
+            ))}
+            <p>チャットで『hana.otomo.eth に〇〇を頼んで』と話しかけると依頼できます（仕事係のみ）</p>
+          </div>
+        )}
         {!s.managed && <div className="card">
           <p>{t("allowanceInfo", lang, { amount: s.allowanceUsdc })}</p>
           <div className="row">

@@ -29,7 +29,7 @@ let dir: string;
 
 const companion: Companion = {
   label: "taro", full_name: "taro.otomo.eth", owner: "0x00000000000000000000000000000000000000aa",
-  resolver: "0xres", personality: "{}", world_nullifier: "n1", agent_sub: "sub", created_at: T0,
+  resolver: "0xres", personality: "{}", world_nullifier: "n1", agent_sub: "sub", created_at: T0, human: "n1", role: "personal",
 };
 
 beforeEach(async () => {

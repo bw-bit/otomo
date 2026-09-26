@@ -25,6 +25,24 @@ describe("parseIntent", () => {
   });
 });
 
+describe("role policy", () => {
+  const friend = { type: "request_friend", friend: "hana.otomo.eth", task: "翻訳", rewardUsdc: 1 } as const;
+  it("work companions never move money or delegate", async () => {
+    for (const intent of [
+      { type: "send_usdc", to: "hana.otomo.eth", amountUsdc: 1, memo: "" },
+      { type: "grow_savings", amountUsdc: 10, days: 7 },
+      friend,
+      { type: "private_task", summary: "秘密" },
+    ] as const) expect((await decide(intent, ctx({ role: "work" }))).kind).toBe("reject");
+    expect((await decide({ type: "update_mood", mood: "calm" }, ctx({ role: "work" }))).kind).toBe("auto");
+  });
+  it("requests only go to work companions", async () => {
+    expect(await decide(friend, ctx({ roleOf: async () => "personal" }))).toMatchObject({ kind: "reject" });
+    expect(await decide(friend, ctx({ roleOf: async () => null }))).toMatchObject({ kind: "reject" });
+    expect(await decide(friend, ctx({ roleOf: async () => "work" }))).toMatchObject({ kind: "needs_approval", resolvedTo: HANA });
+  });
+});
+
 describe("policy", () => {
   it("auto-runs mood updates only", async () => {
     expect((await decide({ type: "update_mood", mood: "sleepy" }, ctx())).kind).toBe("auto");

@@ -4,6 +4,8 @@ import type { ChatFn } from "./llm";
 import { APPROVAL_TTL_MS, MAX_SINGLE_PAYMENT_USDC } from "./policy";
 
 export async function acceptWork(db: Db, id: string, label: string) {
+  const role = (await db.execute({ sql: "SELECT role FROM companions WHERE label = ?", args: [label] })).rows[0]?.role;
+  if (role !== "work") throw new Error("個人の相棒は外部の依頼を受けません");
   const r = await db.execute({ sql: "UPDATE friend_requests SET status = 'accepted' WHERE id = ? AND to_label = ? AND status = 'open'", args: [id, label] });
   if (r.rowsAffected !== 1) throw new Error("この依頼は受諾できません");
 }

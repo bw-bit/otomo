@@ -10,6 +10,9 @@ import {
   COMPANION_ROLE_BITMAP,
   MOOD_KEY,
   RegistryRoles,
+  ROLE_KEY,
+  SIBLINGS_KEY,
+  SKILLS_KEY,
   companionInitCalls,
   dnsEncode,
   grantMoodSetterCall,
@@ -54,14 +57,28 @@ describe("birth proof", () => {
     const r = await checkBirthProof(payload({ signal_hash: hashSignal("0x0000000000000000000000000000000000000001") }), WALLET, { db, verifyWithPortal: ok });
     expect(r).toMatchObject({ ok: false, code: "signal_mismatch" });
   });
-  it("allows one companion per World ID (nullifier)", async () => {
+  const addCompanion = (label: string, human: string) => db.execute({
+    sql: `INSERT INTO companions (label,full_name,owner,resolver,personality,world_nullifier,agent_sub,created_at,human) VALUES (?,?,?,?,?,?,?,?,?)`,
+    args: [label, `${label}.otomo.eth`, `0x${label}`, "0xres", "{}", `${human}:${label}`, null, 1, human],
+  });
+  it("defaults to one companion per World ID (nullifier)", async () => {
     await markNullifierUsed(db, "0xnull", 1);
+    await markNullifierUsed(db, "0xnull", 2);
+    await addCompanion("taro", "0xnull");
     expect(await checkBirthProof(payload(), WALLET, { db, verifyWithPortal: ok })).toMatchObject({ ok: false, code: "duplicate" });
+  });
+  it("lets one human own up to maxCompanions", async () => {
+    await addCompanion("taro", "0xnull");
+    await addCompanion("hana", "0xnull");
+    await addCompanion("other", "0xsomeoneelse");
+    expect(await checkBirthProof(payload(), WALLET, { db, verifyWithPortal: ok, maxCompanions: 3 })).toMatchObject({ ok: true });
+    await addCompanion("jiro", "0xnull");
+    expect(await checkBirthProof(payload(), WALLET, { db, verifyWithPortal: ok, maxCompanions: 3 })).toMatchObject({ ok: false, code: "duplicate", reason: "この World ID で作れる相棒は3体までです" });
   });
   it("rolls back a nullifier insert when the companion insert fails", async () => {
     await expect(db.batch([
       { sql: `INSERT INTO used_nullifiers VALUES (?, ?)`, args: ["0xnull", 1] },
-      { sql: `INSERT INTO companions VALUES (?,?,?,?,?,?,?,?)`, args: ["taro", "taro.otomo.eth", "0xowner", "0xres", "{}", "0xnull", null, null] },
+      { sql: `INSERT INTO companions (label,full_name,owner,resolver,personality,world_nullifier,agent_sub,created_at) VALUES (?,?,?,?,?,?,?,?)`, args: ["taro", "taro.otomo.eth", "0xowner", "0xres", "{}", "0xnull", null, null] },
     ], "write")).rejects.toThrow();
     expect((await db.execute({ sql: `SELECT 1 FROM used_nullifiers WHERE nullifier = ?`, args: ["0xnull"] })).rows).toHaveLength(0);
   });
@@ -99,6 +116,12 @@ describe("ENS calldata", () => {
     const rec = { fullName: "taro.otomo.eth", owner: WALLET as `0x${string}`, description: "d", personalityJson: "{}", mood: "calm" };
     expect(companionInitCalls(rec, null)).toHaveLength(4);
     expect(companionInitCalls(rec, "0x00000000000000000000000000000000000000a9")).toHaveLength(5);
+  });
+  it("publishes role, skills and siblings for discovery", () => {
+    const rec = { fullName: "hana.otomo.eth", owner: WALLET as `0x${string}`, description: "d", personalityJson: "{}", mood: "calm", role: "work", skills: '["翻訳"]', siblings: "sora.otomo.eth" };
+    const calls = companionInitCalls(rec, null).map((data) => decodeFunctionData({ abi: resolverAbi, data }));
+    expect(calls).toHaveLength(7);
+    expect(calls.slice(4).map((c) => c.args?.slice(1))).toEqual([[ROLE_KEY, "work"], [SKILLS_KEY, '["翻訳"]'], [SIBLINGS_KEY, "sora.otomo.eth"]]);
   });
   it("validates companion labels", () => {
     expect(normalizeCompanionLabel(" Taro ")).toBe("taro");

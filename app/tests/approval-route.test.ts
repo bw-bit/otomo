@@ -18,7 +18,7 @@ beforeEach(async()=>{
  vi.stubEnv('APP_SECRET','route-test-secret');
  dir=await mkdtemp(path.join(tmpdir(),'otomo-route-'));db=await openDb(`file:${dir}/test.db`);mocks.getDb.mockResolvedValue(db);
  mocks.exchange.mockReset().mockResolvedValue('verified-test-token');mocks.verify.mockReset().mockResolvedValue({sub:'owner-sub',authTime:Math.floor(Date.now()/1000)+1});mocks.execute.mockReset().mockResolvedValue({txHash:'0xtest'});
- await db.execute({sql:'INSERT INTO companions VALUES (?,?,?,?,?,?,?,?)',args:['alice','alice.otomo.eth','0xowner','0xresolver','{}','nullifier','owner-sub',Date.now()]});
+ await db.execute({sql:'INSERT INTO companions (label,full_name,owner,resolver,personality,world_nullifier,agent_sub,created_at) VALUES (?,?,?,?,?,?,?,?)',args:['alice','alice.otomo.eth','0xowner','0xresolver','{}','nullifier','owner-sub',Date.now()]});
 });
 afterEach(async()=>{db.close();await rm(dir,{recursive:true,force:true});vi.unstubAllEnvs();});
 function request(state:string,label?:string){return new NextRequest(`https://app.example/api/approval/callback?state=${encodeURIComponent(state)}&code=test`,{headers:label?{cookie:`${SESSION_COOKIE}=${sessionValue(label)}`}:{}});}

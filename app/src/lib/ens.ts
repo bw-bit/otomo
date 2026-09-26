@@ -40,6 +40,9 @@ export const COMPANION_ROLE_BITMAP = RegistryRoles.ROLE_SET_RESOLVER | RegistryR
 
 export const MOOD_KEY = "otomo.mood";
 export const PERSONALITY_KEY = "otomo.personality";
+export const ROLE_KEY = "otomo.role";
+export const SKILLS_KEY = "otomo.skills";
+export const SIBLINGS_KEY = "otomo.siblings";
 
 export const verifiableFactoryAbi = parseAbi([
   "function deployProxy(address implementation, uint256 salt, bytes data) returns (address)",
@@ -126,6 +129,10 @@ export interface CompanionRecords {
   description: string;
   personalityJson: string;
   mood: string;
+  /** Discovery records: role ("personal" | "work"), skills (JSON array), siblings (comma-separated full names). */
+  role?: string;
+  skills?: string;
+  siblings?: string;
 }
 
 export function companionInitCalls(r: CompanionRecords, agentGrantInInit: Address | null): Hex[] {
@@ -138,6 +145,9 @@ export function companionInitCalls(r: CompanionRecords, agentGrantInInit: Addres
     set(PERSONALITY_KEY, r.personalityJson),
     set(MOOD_KEY, r.mood),
   ];
+  if (r.role !== undefined) calls.push(set(ROLE_KEY, r.role));
+  if (r.skills !== undefined) calls.push(set(SKILLS_KEY, r.skills));
+  if (r.siblings !== undefined) calls.push(set(SIBLINGS_KEY, r.siblings));
   if (agentGrantInInit) calls.push(grantMoodSetterCall(agentGrantInInit));
   return calls;
 }
