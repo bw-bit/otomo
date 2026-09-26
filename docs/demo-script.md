@@ -1,15 +1,16 @@
-# Otomo — English demo script (about 3 minutes)
+# Otomo — demo video script (about 3.5 minutes)
 
-The functional UI flow was rehearsed again on September 26: bilingual work, separate reward approval, a new Aqua lifecycle, and an expired approval with no execution. A timed human-narrated rehearsal and recording are not complete. Use the updated live application: https://otomo-world-id.vercel.app/. These are observed results; do not describe the Sandbox as real human verification.
+Narration: the creator's own Japanese voice, English subtitles (no synthetic voice). Reading script: `work/video/reading-script-ja.md`; build: `work/video/build.sh`. Recorded 2026-09-27 on a local copy of the production database (see the note in `docs/world-debrief.md`); on-chain steps are real Sepolia transactions.
 
-| Time | Screen/action | Narration |
+| Scene | Screen | Point for judges |
 | --- | --- | --- |
-| 0:00–0:20 | Companion room, with the Sepolia and Sandbox labels visible | “Otomo gives an AI companion a human partner, an ENS name and its own testnet wallet. World ID handles birth, ENS identifies the companion, and 1inch Aqua plus SwapVM enables token exchange.” |
-| 0:20–0:45 | Show sora; switch to taro using the name buttons | “sora is my personal companion. taro takes small writing jobs. The first birth completed in the real World App; additional companions use the authenticated household session. That birth check is separate from the approvals in this demo, which use Sandbox identities.” |
-| 0:45–1:25 | Work → paid job → View delivery & receipt | “sora requested a short introduction. taro accepted and delivered it. I reviewed the text, then approved the two mUSDC reward separately. The receipt shows the transfer from sora's wallet to taro's wallet on Sepolia. These are test tokens.” |
-| 1:25–2:10 | 1inch Aqua → wallet → stopped strategy → ship/dock receipts | “This strategy used ten mUSDC and 0.005 mWETH. At setup, the tokens stayed in sora's wallet. A separate demo agent supplied 0.01 mWETH and received 6.659986 mUSDC in the swap. SwapVM applies a 0.3% input fee. The initial 2,000-to-one ratio is only a demo setting. We stopped the strategy, and its virtual balances are now zero.” |
-| 2:10–2:35 | Evidence & profile, then taro's worker counts | “Each companion owns an ENSv2 name and resolver records. Worker delivery, review and reward counts come from Otomo's recorded activity. They are not a World-issued credit score. sora requested the job; taro earned the delivery record.” |
-| 2:35–3:00 | Keep the approval environment visible; show failure evidence | “The backend validates approvals and binds each one to the action and expiry. The Sandbox protects this testnet flow. Production Session-proof approval is implemented but not working on the tested World App: it returned world_id_4_not_available and no human session was accepted. We show that limitation explicitly.” |
+| 1 Intro | Signup: name, role, Sign up → World ID QR | Problem: AI assistants forget you, can't hold money, can be mass-produced |
+| 2 Birth | Real World App verification → birth → momo.otomo.eth | IDKit success, server-verified, ENS name + wallet created |
+| 3 Room | sora / taro / momo squish and answer | Up to 3 companions per verified human, roles |
+| 4 Work | sora asks taro → **World ID for Agents Sandbox** → taro delivers → review → reward approved with World ID → Etherscan; an **expired approval shows "Not executed"** | Protected action needs fresh verification; failure path executes nothing |
+| 5 Aqua | Prepare → approve with World ID → ship → swap → stop → Etherscan | Official Aqua registry, SwapVM program, tokens move only on swap |
+| 6 ENS / x402 | Public profile records, services list | ENSv2 records as identity + reputation; agents selling services |
+| 7 Outro | Room, URL | otomo-world-id.vercel.app |
 
 ## Evidence to open
 

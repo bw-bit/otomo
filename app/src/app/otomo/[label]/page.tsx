@@ -466,7 +466,7 @@ export default function CompanionPage() {
         <p className="demo-environment"><span>{demoCopy.environment}</span><span>{approvalLabel}</span></p>
         {s.provisioning && s.provisioning.status !== "ready" && <p className="ng">{t("provisioningStatus",lang,{status:birthStageText(s.provisioning.status,lang)})}</p>}
         {authResult === "ok" && <p role="status">{t("approved",lang)}</p>}
-        {authResult === "ng" && <p className="ng" role="alert">{t("rejected",lang)}: {authReason}</p>}
+        {authResult === "ng" && <p className="ng" role="alert">{t("rejected",lang)}: {authReason === "expired" ? t("approvalExpired",lang) : authReason}</p>}
         {!s.bound && <div className="card"><p>{t("bindIntro",lang)}</p><a href="/api/auth/start?kind=bind">{t("bindingAction",lang)} →</a></div>}
         <nav className="demo-tabs" aria-label={demoCopy.navigation}>
           {(["talk","work","aqua"] as const).map(key => <button key={key} aria-pressed={view === key} onClick={() => { setView(key); if (key !== "talk") void load(); }}>{demoCopy[key]}{key === "work" && activeJobs.length > 0 && <span className="demo-count">{activeJobs.length}</span>}</button>)}

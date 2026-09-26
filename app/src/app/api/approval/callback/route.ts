@@ -33,6 +33,6 @@ export async function GET(req: NextRequest): Promise<Response> {
   const label = readSession(req.cookies.get(SESSION_COOKIE)?.value);
   const url = new URL(label ? `/otomo/${label}` : "/", req.nextUrl.origin);
   url.searchParams.set("auth", result.ok ? "ok" : "ng");
-  if (!result.ok) url.searchParams.set("reason", result.reason);
+  if (!result.ok) url.searchParams.set("reason", result.code ?? result.reason);
   return NextResponse.redirect(url);
 }

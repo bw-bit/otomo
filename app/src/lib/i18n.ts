@@ -86,6 +86,7 @@ export const UI_STRINGS = {
   unset: { en: "(unset)", ja: "（未設定）", zh: "（未设置）", ko: "（미설정）" },
   unresolved: { en: "unresolved", ja: "未解決", zh: "未解析", ko: "미해결" },
   approved: { en: "Approved. The request was executed.", ja: "承認しました。依頼を実行しました。", zh: "已批准，请求已执行。", ko: "승인했습니다. 요청을 실행했습니다." },
+  approvalExpired: { en: "the 5-minute approval window expired, so nothing was sent", ja: "承認の期限（5分）が切れたため、何も送られていません", zh: "5分钟的批准期限已过，因此没有发送任何内容", ko: "5분 승인 기한이 지나 아무것도 전송되지 않았습니다" },
   rejected: { en: "Not executed", ja: "実行しませんでした", zh: "未执行", ko: "실행하지 않았습니다" },
   notBound: { en: "You haven't bonded yet. Important requests are tied to this identity check.", ja: "まだ契りを結んでいません。重要な依頼はこの本人確認に紐付きます。", zh: "还没有缔结契约。重要请求将绑定到此身份验证。", ko: "아직 계약을 맺지 않았습니다. 중요한 요청은 이 본인 확인에 연결됩니다." },
   bind: { en: "Bond with World ID", ja: "World ID で契りを結ぶ", zh: "用 World ID 缔结契约", ko: "World ID로 계약 맺기" },

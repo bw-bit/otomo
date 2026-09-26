@@ -1,6 +1,6 @@
 # Otomo
 
-**English summary:** Otomo ("companion" in Japanese) lets each verified World ID nullifier raise up to 3 AI companions with explicit roles (personal / work) — no wallet connect needed. Role permissions are enforced by deterministic policy code, and companions discover each other through ENS text records (`otomo.role`, `otomo.skills`, `otomo.siblings`). Each companion owns an encrypted wallet and a non-transferable ENSv2 subname with a dedicated Permissioned Resolver. Its Aqua + SwapVM strategy records virtual liquidity without depositing tokens on `ship`; tokens move only when a swap executes. Consequential actions use fresh OIDC approval in the World ID for Agents event sandbox; the sandbox identity is mocked. The deployed application has completed the Aqua ship → swap → dock lifecycle and a 2 mUSDC job payment on Sepolia. These operations used Sandbox approval; production Session-proof approval remains unverified.
+**English summary:** Otomo ("companion" in Japanese) lets a World ID-verified human welcome up to 3 AI companions with explicit roles (personal / work) — no wallet connect needed. Birth uses an IDKit uniqueness proof verified on the server; the same human signing up twice is refused. Each companion owns an encrypted wallet and a non-transferable ENSv2 subname with its own Permissioned Resolver, and companions discover each other through ENS text records (`otomo.role`, `otomo.skills`, `otomo.siblings`). Every money-moving action (job request, reward, Aqua strategy operation) runs only after a fresh World ID for Agents verification (event Sandbox, mocked identity); expired or mismatched approvals do not execute. The Aqua + SwapVM strategy is shipped to 1inch's canonical Aqua registry on Sepolia (`0x1111113CCf1426A8E30e2bfF5E005d929bF6a90a`) with a SwapVM router redeployed by this project; tokens stay in the companion wallet until a swap executes. Submission text: [`docs/submission-entry.md`](docs/submission-entry.md).
 
 ---
 
@@ -94,9 +94,10 @@ flowchart LR
 
 - **Aquaへの預け入れ不要**: `aqua.ship` は仮想残高の記録だけで資金は移動しません。スワップ成立時に `pull`/`push` で直接移動、`dock` で残高ゼロ。UI でウォレット残高と仮想残高を並べて示します。
 - **SwapVM プログラム**: `Deadline → FlatFeeAmountIn(0.3%) → XYCSwap → Salt`（[`contracts/src/OtomoProgram.sol`](contracts/src/OtomoProgram.sol)、順序は swap-vm `docs/PROGRAMS.md` に準拠）。手数料 `0.003e9` = 0.3%（`BPS = 1e9`）。
+- **公式 Aqua レジストリを使用**: Sepolia 上の 1inch 公式 Aqua `0x1111113CCf1426A8E30e2bfF5E005d929bF6a90a` に ship します。SwapVM ルーター（`0x6069AaEBC937b794b02e9Fb14EeBE3881608B7C1`、ルールで再デプロイ可）と OtomoOrderBuilder（`0x159a581Ca16dE62D58bC24E483f25f02066B14c5`）は本プロジェクトがデプロイ（[`contracts/script/DeploySepoliaRouter.s.sol`](contracts/script/DeploySepoliaRouter.s.sol)）。
 - **公式契約を改変せず**: pinned commit で取得（[`contracts/script/install-deps.sh`](contracts/script/install-deps.sh)、commit 一覧は [`contracts/README.md`](contracts/README.md)）。
 - **証跡**: ローカル anvil での ship→quote→swap→dock ログは [`contracts/evidence/demo.log`](contracts/evidence/demo.log)。オンチェーンヘルパー [`contracts/src/OtomoOrderBuilder.sol`](contracts/src/OtomoOrderBuilder.sol) で trait パッキングを TS 再実装せずに済ませています。
-- **Sepolia デプロイ**: Aqua、AquaSwapVMRouter、OtomoOrderBuilder、mWETHをデプロイ済み（アドレスは [`contracts/deployments/sepolia.json`](contracts/deployments/sepolia.json)）。相棒 `sora` の本番アプリからの準備→ship→swap→dock、および `sora`→`taro` の依頼→納品→検収→2 mUSDC報酬をSepoliaで確認済みです。証拠は [`docs/evidence/sepolia-demo.json`](docs/evidence/sepolia-demo.json)。操作承認はSandboxの模擬IDです。
+- **Sepolia デプロイ**: 旧構成では Aqua 自体も自前デプロイしていましたが、現在は公式 Aqua レジストリに切り替え済み。AquaSwapVMRouter、OtomoOrderBuilder、mWETHをデプロイ済み（アドレスは [`contracts/deployments/sepolia.json`](contracts/deployments/sepolia.json)）。相棒 `sora` の本番アプリからの準備→ship→swap→dock、および `sora`→`taro` の依頼→納品→検収→2 mUSDC報酬をSepoliaで確認済みです。証拠は [`docs/evidence/sepolia-demo.json`](docs/evidence/sepolia-demo.json)。操作承認はSandboxの模擬IDです。
 
 Powered by Aqua — © Degensoft Ltd 2025. SwapVM — © Degensoft Ltd 2025.
 （Aqua / SwapVM を取り込んだ Solidity ファイルは `LicenseRef-Degensoft-Aqua-Source-1.1` / `LicenseRef-Degensoft-SwapVM-1.1` でライセンスされます。`contracts/README.md` と `contracts/lib/*/LICENSES/` 参照）
@@ -157,7 +158,7 @@ cd ../app && npm run dev      # http://localhost:3000
 
 | コマンド | 結果 |
 | --- | --- |
-| `cd app && npm test` | UI公開用コピー: **113件パス・2件スキップ（任意の実環境テスト）**。2026-09-26確認 |
+| `cd app && npm test` | **159件パス・3件スキップ（任意の実環境テスト）**。2026-09-27確認 |
 | `cd app && npm run lint` | tsc --noEmit エラーなし |
 | `cd app && npm run build` | 成功（`/api/strategies`, `/api/strategies/[id]` 含む全ルート） |
 | `cd contracts && forge test` | **7 件すべてパス**（OtomoStrategy 5 + OtomoOrderBuilder 2） |
@@ -166,7 +167,8 @@ cd ../app && npm run dev      # http://localhost:3000
 ## 未検証・制限（正直に）
 
 - **Sepoliaのアプリ経由フローを確認済み**。soraがmakerとしてship/dockし、別のデモエージェントがtakerとしてswapしました。終了後の仮想残高は0。送信者とTransferイベントを照合済みです。Sandboxによる操作承認を本番の本人確認として扱いません。
-- **本番の操作承認は未完成**。Session-proof連携は実装しましたが、World Appで `world_id_4_not_available` が発生し、バックエンドが受理した本番Sessionは0件です。誕生時のWorld ID成功とは別の検証です。
+- **操作承認は World ID for Agents の Sandbox（模擬ID）**。お金が動く操作は毎回その場の再認証が必要です。本番の Session-proof 連携も実装しましたが、検証した World App では `world_id_4_not_available` となり未検証です。
+- **デモ動画の誕生シーン**は本番DBのローカルコピー上で、2つ目の Portal アクション `otomo-approve` を使って撮影しました（本人の World ID は `otomo-birth` で使用済みのため）。World App の認証と `momo.otomo.eth` の ENS 登録は本物ですが、momo は公開アプリには存在しません。
 - Selfie Check は厳密な「1人1アカウント」を保証しません（medium assurance）。体数の上限は nullifier で担保し、追加のリスク判定に sybil_score を使います。
 - 価格はモック想定（初期比率1 mWETH = 2000 mUSDC、10 mUSDCに対して0.005 mWETH）。モックトークンなので実市場連動ではありません。
 - LLM は OpenAI 互換 `/chat/completions` なら任意のプロバイダに差し替え可能。LLM の出力は intent JSON として zod 検証され、ポリシー判定は常に決定的なコード側です。
@@ -181,7 +183,9 @@ cd ../app && npm run dev      # http://localhost:3000
 
 ## 最新のデモと提出状況
 
+- [Submission text (English)](docs/submission-entry.md)
 - [English demo script](docs/demo-script.md)
+- [World integration debrief](docs/world-debrief.md)
 - [Submission readiness and sponsor evidence](docs/submission-readiness.md)
 - [Demo UI specification and AI-assisted changes](docs/demo-ui-spec.md)
 

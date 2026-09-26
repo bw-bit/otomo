@@ -66,7 +66,7 @@ export interface CallbackDeps {
 export type CallbackResult =
   | { ok: true; kind: "bind"; companion: string }
   | { ok: true; kind: "approve"; actionId: string; txHash?: string }
-  | { ok: false; reason: string; actionId?: string; companion?: string };
+  | { ok: false; reason: string; code?: "expired"; actionId?: string; companion?: string };
 
 async function closeAction(db: Db, id: string, status: PendingAction["status"], reason: string) {
   await db.execute({ sql: `UPDATE pending_actions SET status = ?, reason = ? WHERE id = ? AND status = 'pending'`, args: [status, reason, id] });
@@ -80,7 +80,7 @@ export async function handleAuthCallback(input: CallbackInput, deps: CallbackDep
   const fail = async (reason: string, status: PendingAction["status"] = "rejected"): Promise<CallbackResult> => {
     if (flow.kind === "approve") {
       await closeAction(db, flow.ref, status, reason);
-      return { ok: false, reason, actionId: flow.ref };
+      return { ok: false, reason, actionId: flow.ref, ...(status === "expired" ? { code: "expired" as const } : {}) };
     }
     return { ok: false, reason, companion: flow.ref };
   };

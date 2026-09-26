@@ -43,3 +43,23 @@ The official error definition for `world_id_4_not_available` is an unavailable W
 The verifier now requires `success: true` and successful results for all requested credentials; a 200 partial-success response alone is insufficient. The original proof payload is forwarded unchanged. This hardening is committed, tested and deployed to the production app. It does not resolve the phone's missing-credential condition.
 
 Latest functional rehearsal: English/Japanese delivery, review, 2 mUSDC reward and Aqua ship/swap/dock were completed again through the deployed UI. All four Sepolia receipts succeeded; ship moved no tokens, swap transferred tokens, and dock left zero virtual balances. See `docs/evidence/rehearsal-20260926.json`.
+
+## Final state and debrief — 2026-09-27
+
+**Trust moments and credentials.** Birth issues a scarce right (wallet, gas, ENS name) to a person, so it uses an IDKit uniqueness proof (action `otomo-birth`, signal = one-time server challenge); Proof of Human is the minimum sufficient credential, with Passport, My Number Card and Selfie Check as alternatives. Moving money needs "the owner is here now", so every money-moving action (job request, reward, Aqua strategy operation) requires a fresh World ID for Agents verification bound to that action.
+
+**Success paths shown.** (1) IDKit: a real World App verification followed by `/api/birth` 200 and a Sepolia ENS registration (sora on the production app; momo in the video, see below). (2) World ID for Agents: pending action → Sandbox verification (`prompt=login`, `max_age=0`) → backend validates the ID token, nonce, subject and `auth_time` → the protected action executes (reward tx `0x3b36874f14f28eaf6e94b19e40a7fba494f2ae6826e889c177a9ef92a0f5478e`).
+
+**Alternative / failure paths shown.** (1) IDKit: the same human signing up again gets `nullifier_replayed`; the app now explains "This World ID already has companions. Sign in to welcome a sibling." and no companion is created. (2) World ID for Agents: an approval opened after its 5-minute window completes the Sandbox verification but the backend refuses; the room shows "Not executed: the 5-minute approval window expired, so nothing was sent", the action status is `expired` and no transaction exists (recorded in the video). Cancellation, subject mismatch, stale `auth_time`, state replay and failed token validation are covered by `app/tests/approval.test.ts`.
+
+**Approval design history.** We tried (a) production Session proofs, which the tested World App could not produce (`world_id_4_not_available`); (b) re-using the `otomo-birth` uniqueness proof for approvals, rejected by World as `nullifier_replayed` because a uniqueness proof is one per person per action; (c) a birth-verified owner confirmation button, which we removed because it let a protected action run without a fresh verification. The final design is World ID for Agents for every protected action.
+
+**Video recording note.** To show a fresh successful World ID verification, the video was recorded on a local copy of the production database with the birth action switched to a second Portal action (`otomo-approve`, via `NEXT_PUBLIC_WORLD_BIRTH_ACTION`), because the presenter's World ID was already used for `otomo-birth`. The World App verification and the ENS registration of `momo.otomo.eth` (`0x906f0a36eec615466b1cb735fdaf9fbb2370d3e8b06c08f5eb871733c231ce29`) are real; momo is not in the public app.
+
+**Time to first success.** About 2 h 13 min from the first saved production failure to the first successful `/api/birth`.
+
+**Friction.** (1) IDKit's generic errors did not say whether the credential, the RP signature or the action caused a failure. (2) It was not obvious that a uniqueness proof cannot be repeated for the same action, or that Session proofs need World ID 4.0 credentials that a legacy-verified phone may lack. (3) The Portal has no per-action "max verifications" setting, so the only way to re-demonstrate a birth was a second action.
+
+**Missing capability / documentation.** A documented, supported way to ask an already-verified human to re-prove presence for later actions on devices without World ID 4.0 credentials, and a table of which credentials each proof type supports.
+
+**Improvement with the greatest impact.** Surfacing the specific IDKit error code in the app (and mapping `nullifier_replayed` to "you already have companions, sign in") turned opaque failures into actionable ones.

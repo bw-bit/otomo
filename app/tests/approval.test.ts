@@ -67,7 +67,7 @@ describe("approval callback", () => {
   it("does not execute after the 5 minute window", async () => {
     const { action, flow, execute, deps } = await setup();
     const r = await handleAuthCallback({ state: flow.state, code: "c", error: null, now: T0 + APPROVAL_TTL_MS + 1 }, deps);
-    expect(r.ok).toBe(false);
+    expect(r).toMatchObject({ ok: false, code: "expired" });
     expect(execute).not.toHaveBeenCalled();
     expect(await statusOf(action.id)).toBe("expired");
   });
