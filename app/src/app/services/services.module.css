@@ -1,0 +1,35 @@
+.page{max-width:1080px;margin:0 auto;padding:24px 24px 64px;color:#f5f1fc}
+.top{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.top>a{font-weight:700;font-size:24px;text-decoration:none}
+.hero{padding:48px 0 28px;max-width:760px}
+.hero h1{font-size:clamp(30px,5vw,48px);line-height:1.25;letter-spacing:-.03em;margin:12px 0}
+.hero>p:last-child{font-size:18px;line-height:1.7}
+.eyebrow{font-size:12px;letter-spacing:.18em;font-weight:700;color:#b5d6ca}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+.card{color:#263a38;background:#fffdf8;border:1px solid #dce5de;border-radius:24px;padding:28px;margin-bottom:22px;box-shadow:0 8px 30px #19382c06}
+.card h2{margin:0 0 12px;font-size:25px}
+.card h3{font-size:16px;margin:26px 0 8px}
+.card p,.card li{line-height:1.75}
+.status{font-size:13px;font-weight:700;color:#456c5c;margin-top:0}
+.price{font-size:44px;font-weight:700;margin:18px 0 0!important;line-height:1.1!important}
+.price span{font-size:18px}
+.muted{font-size:13px;color:#5d6d68}
+.network{border-top:1px solid #dce5de;padding-top:16px;font-size:14px;font-weight:700}
+.steps{padding-left:24px}
+.steps li{padding:6px 0 12px}
+.card label{display:block;font-size:14px;margin:18px 0 8px}
+.card input,.card select{display:block;width:100%;max-width:100%;min-height:44px;margin-top:7px;padding:10px 12px;box-sizing:border-box;background:#fff;color:#263a38;border:1px solid #9aada5;border-radius:10px;font:inherit}
+.card button{min-height:44px;margin-top:14px;padding:10px 18px;border:0;border-radius:12px;background:#285e50;color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.card button:disabled{background:#e0e7e1;color:#53665e;cursor:not-allowed}
+.card a{color:#285e50}
+.address{font-family:monospace;font-size:12px;overflow-wrap:anywhere}
+.card code{overflow-wrap:anywhere;font-size:12px}
+.card pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f1f5f0;padding:16px;border-radius:12px;font-size:12px;line-height:1.6;max-height:420px;overflow:auto}
+.receipt{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 0;border-bottom:1px solid #dce5de}
+.card summary{cursor:pointer;font-weight:700}
+@media(max-width:700px){.page{padding:18px 16px 40px}
+.grid{grid-template-columns:1fr;gap:0}
+.card{padding:22px}
+.hero{padding-top:32px}
+.top{align-items:flex-start}
+}

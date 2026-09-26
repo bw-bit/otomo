@@ -1,5 +1,14 @@
 # Otomo 引き継ぎ（Codex向け）— 2026-09-26 時点
 
+## 更新（2026-09-26 x402サービス実装）
+
+- `/services`、`GET /api/services`、`POST /api/services/{label}/page-report`、セッション限定の受取記録APIをローカル実装。価格0.05 USDC、英日レポート、Bazaar入力/出力スキーマ、決済完了後の結果返却、同一支払い再送保護、日次上限を追加。
+- 既定はBase Sepolia。既存Sepolia mUSDC/ENSとはネットワークが異なる。仕事相棒を `X402_SELLER_LABELS` で明示許可し、相棒ウォレットへ直接受け取る。受取先に秘密鍵は不要。
+- **今回のx402改修は本番未反映。実送金・Bazaar掲載は未確認。** CDP_API_KEY_ID/SECRETが未設定で、ChromeでもCDPサインイン画面を確認。My Studio `otomo-x402-cdp-setup` に本人ログイン待ちを登録。既存 `.env.local`、本番環境、資金には触れていない。
+- 通常136テスト、型チェック、本番ビルド成功。追加の実公開ページ+実LLMテスト1件成功。公式SDKの支払いテストは模擬facilitatorであり、実チェーンE2Eではない。UIは隔離DBの架空provider `demo-helper`、英日/スマートフォンで確認。ローカルpreviewは終了。
+- 仕様と有効化手順: `docs/x402-services.md`。証拠: `work/x402/verification.json` と同ディレクトリのログ。別作業中の認証/Aqua/LLM/部屋の既存差分は開始時ハッシュと一致し、上書きしていない。
+- 次はCDPログイン確認とキー設定、正しいVercel `otomo` への反映、公開402検証、許可されたテスト決済・着金照合、Bazaar検証。既存Vercel `app` には触れない。
+
 ## 更新（2026-09-26 15:02 JST）
 
 - UIとAqua改修をVercel `otomo` 本番へ反映済み。deployment `dpl_FhLkgY7JY1Um7ruybYaGsx8eoyMu` はREADYで `otomo-world-id.vercel.app` aliasを確認。既存の別プロジェクト `app` には触れていない。

@@ -45,6 +45,7 @@ export function PublicProfileView({ profile, name }: { profile: PublishedProfile
       <details className="plain"><summary>{copy.data}</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{profile.raw}</pre></details>
     </>}
     <ProfileDisclosure lang={lang} />
+    <p><Link href="/services">{lang === "ja" ? "相棒の有料サービス・価格・受け取れるもの" : "Companion services, prices and deliverables"}</Link></p>
     <p><Link href="/">{copy.home}</Link></p>
   </section></main>;
 }
